@@ -1,4 +1,6 @@
 # Mbed CI Test Shield
+![Mbed CI Test Shield pcb](https://app.box.com/shared/static/bijiwmo5xfw0mz87y4zxysnwlab9mixu.png)
+
 This project is an updated version of the [Mbed CI Test shield](https://github.com/ARMmbed/ci-test-shield), a project created by the ARM Mbed team several years ago.  Essentially, the CI Test Shield is a single board that can use and exercise as many different hardware interfaces of an MCU as possible.  When combined with appropriate test cases and scripts, it should allow a CI job to exercise and test nearly all major functionality of the Mbed board.
 
 The goal of this project is to strike a balance between simplicity and functionality -- it should be cheap and easy to make so that CI infrastructure can be set up for as many Mbed targets as possible, but it should also test as many features of the MCU as possible within those constraints.  For these reasons, the board includes the following circuits:
