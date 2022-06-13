@@ -1,0 +1,15 @@
+{
+    "target_overrides": {
+        "*": {
+            "platform.stdio-baud-rate": 115200,
+            "platform.stdio-buffered-serial": 1,
+			"target.components_add" : ["SD", "I2CEE"]
+        },
+        "ARDUINO_NANO33BLE": {
+            "sd.SPI_CS": "D10",
+            "sd.SPI_MOSI": "D11",
+            "sd.SPI_MISO": "D12",
+            "sd.SPI_CLK": "D13"
+        }
+    }
+}
