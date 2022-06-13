@@ -23,3 +23,8 @@ mbed_greentea_add_test(
     TEST_NAME testshield-businout
     TEST_SOURCES BusInOutTest.cpp
 )
+
+mbed_greentea_add_test(
+    TEST_NAME testshield-interruptin
+    TEST_SOURCES InterruptInTest.cpp
+)
