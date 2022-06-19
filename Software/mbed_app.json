@@ -86,7 +86,12 @@
             "value": "ARDUINO_UNO_D2"
         },
 
-
+        "TESTSHIELD_ENABLE_HW_SPI_CS": {
+            "help": "Set to 1 if PIN_SPI_CS is connected to a pin with hardware SPI support",
+            "macro_name": "TESTSHIELD_ENABLE_HW_SPI_CS",
+            "accepted_values": ["0", "1"],
+            "value": "1"
+        },
         "TESTSHIELD_DEBUG_MESSAGES": {
             "help": "Set to 1 to enable debug messages from the test shield tests",
             "macro_name": "TESTSHIELD_DEBUG_MESSAGES",
@@ -100,13 +105,17 @@
         "*": {
             "platform.stdio-baud-rate": 115200,
             "platform.stdio-buffered-serial": 1,
-			"target.components_add" : ["SD", "I2CEE"]
+			"target.components_add" : ["SD", "I2CEE"],
+            "sd.CRC_ENABLED": 1
         },
         "ARDUINO_NANO33BLE": {
             "sd.SPI_CS": "D10",
             "sd.SPI_MOSI": "D11",
             "sd.SPI_MISO": "D12",
             "sd.SPI_CLK": "D13"
+        },
+        "NUCLEO_F429ZI": {
+            "app.TESTSHIELD_ENABLE_HW_SPI_CS": 0
         }
     }
 }

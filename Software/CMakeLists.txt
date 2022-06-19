@@ -30,7 +30,18 @@ mbed_greentea_add_test(
 )
 
 mbed_greentea_add_test(
+    TEST_NAME testshield-digitalio
+    TEST_SOURCES DigitalIOTest.cpp
+)
+
+mbed_greentea_add_test(
     TEST_NAME testshield-i2c
     TEST_SOURCES I2CTest.cpp
     TEST_REQUIRED_LIBS mbed-storage-i2cee
+)
+
+mbed_greentea_add_test(
+    TEST_NAME testshield-spi
+    TEST_SOURCES SPITest.cpp
+    TEST_REQUIRED_LIBS mbed-storage-sd mbed-storage-fat
 )
