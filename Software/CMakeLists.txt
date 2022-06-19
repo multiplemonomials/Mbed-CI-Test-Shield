@@ -28,3 +28,9 @@ mbed_greentea_add_test(
     TEST_NAME testshield-interruptin
     TEST_SOURCES InterruptInTest.cpp
 )
+
+mbed_greentea_add_test(
+    TEST_NAME testshield-i2c
+    TEST_SOURCES I2CTest.cpp
+    TEST_REQUIRED_LIBS mbed-storage-i2cee
+)

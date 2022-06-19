@@ -6,5 +6,6 @@
     <mapping directory="$PROJECT_DIR$/cmake-build-develop-nano33ble/_deps/greentea-client-src" vcs="Git" />
     <mapping directory="$PROJECT_DIR$/cmake-build-develop-nucleo-f429zi/_deps/greentea-client-src" vcs="Git" />
     <mapping directory="$PROJECT_DIR$/mbed-os" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/pyBusPirateLite" vcs="Git" />
   </component>
 </project>
