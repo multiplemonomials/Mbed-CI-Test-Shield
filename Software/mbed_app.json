@@ -104,7 +104,7 @@
     "target_overrides": {
         "*": {
             "platform.stdio-baud-rate": 115200,
-            "platform.stdio-buffered-serial": 0,
+            "platform.stdio-buffered-serial": 1,
 			"target.components_add" : ["SD", "I2CEE"],
             "sd.CRC_ENABLED": 1
         },
@@ -116,6 +116,9 @@
         },
         "NUCLEO_F429ZI": {
             "app.TESTSHIELD_ENABLE_HW_SPI_CS": 0
+        },
+        "STM32L452xE": {
+            "target.clock_source": "USE_PLL_HSI"
         }
     }
 }

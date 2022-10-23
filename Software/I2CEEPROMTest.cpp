@@ -128,6 +128,8 @@ utest::v1::status_t test_setup(const size_t number_of_cases)
 
 // Test cases
 Case cases[] = {
+			// TODO need tests that test using a correct and incorrect address and seeing if we get the right result.
+			// Should use single byte and multi byte API.  Also should have one that does and does not transfer one byte after sending the address.
 		Case("I2C -  Instantiation of I2C Object", test_object),
 		Case("I2C - 100kHz - EEPROM WR Single Byte",single_byte_WR<100000, 1>),
 		Case("I2C - 100kHz - EEPROM 2nd WR Single Byte",single_byte_WR<100000, 1025>),

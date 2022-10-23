@@ -36,8 +36,13 @@ mbed_greentea_add_test(
 )
 
 mbed_greentea_add_test(
-    TEST_NAME testshield-i2c
-    TEST_SOURCES I2CTest.cpp
+    TEST_NAME testshield-i2c-basic
+    TEST_SOURCES I2CBasicTest.cpp
+)
+
+mbed_greentea_add_test(
+    TEST_NAME testshield-i2c-eeprom
+    TEST_SOURCES I2CEEPROMTest.cpp
     TEST_REQUIRED_LIBS mbed-storage-i2cee
 )
 

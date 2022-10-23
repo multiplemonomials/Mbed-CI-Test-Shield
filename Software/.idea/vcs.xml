@@ -2,9 +2,7 @@
 <project version="4">
   <component name="VcsDirectoryMappings">
     <mapping directory="$PROJECT_DIR$/.." vcs="Git" />
-    <mapping directory="$PROJECT_DIR$/cmake-build-develop-musca-s1/_deps/greentea-client-src" vcs="Git" />
-    <mapping directory="$PROJECT_DIR$/cmake-build-develop-nano33ble/_deps/greentea-client-src" vcs="Git" />
-    <mapping directory="$PROJECT_DIR$/cmake-build-develop-nucleo-f429zi/_deps/greentea-client-src" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/cmake-build-develop-l452re/_deps/greentea-client-src" vcs="Git" />
     <mapping directory="$PROJECT_DIR$/mbed-os" vcs="Git" />
     <mapping directory="$PROJECT_DIR$/pyBusPirateLite" vcs="Git" />
   </component>
