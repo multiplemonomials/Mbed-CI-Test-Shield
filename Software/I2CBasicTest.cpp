@@ -62,6 +62,95 @@ void test_incorrect_addr_transaction()
 	i2c->stop();
 }
 
+#if DEVICE_I2C_ASYNCH
+void test_incorrect_addr_async()
+{
+    uint8_t const data[2] = {0x01, 0x04}; // Writes 0x4 to address 1
+    TEST_ASSERT_EQUAL(I2C::Result::NACK, i2c->transfer_and_wait(0x20,
+                                                               reinterpret_cast<const char *>(data), 2,
+                                                               nullptr, 0,
+                                                               1s));
+}
+#endif
+
+// The following tests write one byte in EEPROM, then read it back.  Each pair of tests does the same thing,
+// but using a different API.
+void test_simple_write_single_byte()
+{
+    // Write 0x2 to address 1
+    i2c->start();
+    TEST_ASSERT_EQUAL(I2C::Result::ACK, i2c->write_byte(EEPROM_I2C_ADDRESS));
+    TEST_ASSERT_EQUAL(I2C::Result::ACK, i2c->write_byte(0x1)); // address
+    TEST_ASSERT_EQUAL(I2C::Result::ACK, i2c->write_byte(0x2)); // data
+    i2c->stop();
+
+    // Maximum program time before the EEPROM responds again
+    ThisThread::sleep_for(5ms);
+}
+
+void test_simple_read_single_byte()
+{
+    // Set read address to 1
+    i2c->start();
+    TEST_ASSERT_EQUAL(I2C::Result::ACK, i2c->write_byte(EEPROM_I2C_ADDRESS));
+    TEST_ASSERT_EQUAL(I2C::Result::ACK, i2c->write_byte(0x1)); // address
+    // Do NOT call stop() so that we do a repeated start
+
+    // Read the byte
+    i2c->start();
+    TEST_ASSERT_EQUAL(I2C::Result::ACK, i2c->write_byte(EEPROM_I2C_ADDRESS | 1));
+    int readByte = i2c->read_byte(false);
+    i2c->stop();
+    TEST_ASSERT_EQUAL(0x2, readByte);
+}
+
+void test_simple_write_transaction()
+{
+    uint8_t const data[2] = {0x01, 0x03}; // Writes 0x3 to address 1
+    TEST_ASSERT_EQUAL(I2C::Result::ACK, i2c->write(EEPROM_I2C_ADDRESS, reinterpret_cast<const char *>(data), 2));
+
+    // Maximum program time before the EEPROM responds again
+    ThisThread::sleep_for(5ms);
+}
+
+void test_simple_read_transaction()
+{
+    // Set read address to 1
+    uint8_t const readAddr = 0x01;
+    TEST_ASSERT_EQUAL(I2C::Result::ACK, i2c->write(EEPROM_I2C_ADDRESS, reinterpret_cast<const char *>(&readAddr), 1, true));
+
+    // Read the byte back
+    uint8_t readByte = 0;
+    TEST_ASSERT_EQUAL(I2C::Result::ACK, i2c->read(EEPROM_I2C_ADDRESS | 1, reinterpret_cast<char *>(&readByte), 1));
+    TEST_ASSERT_EQUAL_UINT8(0x3, readByte);
+}
+
+#if DEVICE_I2C_ASYNCH
+void test_simple_write_async()
+{
+    uint8_t const data[2] = {0x01, 0x04}; // Writes 0x4 to address 1
+    TEST_ASSERT_EQUAL(I2C::Result::ACK, i2c->transfer_and_wait(EEPROM_I2C_ADDRESS,
+                                                               reinterpret_cast<const char *>(data), 2,
+                                                               nullptr, 0,
+                                                               1s));
+
+    // Maximum program time before the EEPROM responds again
+    ThisThread::sleep_for(5ms);
+}
+
+void test_simple_read_async()
+{
+    // Set read address to 1, then read the data back in one fell swoop.
+    uint8_t const readAddr = 0x01;
+    uint8_t readByte = 0;
+    TEST_ASSERT_EQUAL(I2C::Result::ACK, i2c->transfer_and_wait(EEPROM_I2C_ADDRESS, reinterpret_cast<const char *>(&readAddr), 1,
+                                                               reinterpret_cast<char *>(&readByte), 1,
+                                                               1s));
+
+    TEST_ASSERT_EQUAL_UINT8(0x4, readByte);
+}
+#endif
+
 utest::v1::status_t test_setup(const size_t number_of_cases)
 {
 	// Create I2C
@@ -73,16 +162,30 @@ utest::v1::status_t test_setup(const size_t number_of_cases)
 	return verbose_test_setup_handler(number_of_cases);
 }
 
+// Macro to help with async tests (can only run them if the device has the I2C_ASYNCH feature)
+#if DEVICE_I2C_ASYNCH
+#define ADD_ASYNC_TEST(x) x,
+#else
+#define ADD_ASYNC_TEST(x)
+#endif
+
 // Test cases
 Case cases[] = {
-			// TODO need tests that test using a correct and incorrect address and seeing if we get the right result.
-			// Should use single byte and multi byte API.  Also should have one that does and does not transfer one byte after sending the address.
 		Case("Correct Address - Single Byte", test_correct_addr_single_byte),
 		Case("Correct Address - Transaction", test_correct_addr_transaction),
         Case("Incorrect Address - Single Byte", test_incorrect_addr_single_byte),
 		Case("Incorrect Address - Transaction", test_incorrect_addr_transaction),
-        Case("2nd Correct Address - Transaction", test_correct_addr_transaction)
+        ADD_ASYNC_TEST(Case("Incorrect Address - Async", test_incorrect_addr_async))
+        Case("Simple Write - Single Byte", test_simple_write_single_byte),
+        Case("Simple Read - Single Byte", test_simple_read_single_byte),
+        Case("Simple Write - Transaction", test_simple_write_transaction),
+        Case("Simple Read - Transaction", test_simple_read_transaction),
+        ADD_ASYNC_TEST(Case("Simple Write - Async", test_simple_write_async))
+        ADD_ASYNC_TEST(Case("Simple Read - Async", test_simple_read_async))
 };
+
+// TODO: Test repeated start from each mode into each other mode
+// TODO: Test that another thread can execute during the async operation
 
 Specification specification(test_setup, cases, greentea_continue_handlers);
 
