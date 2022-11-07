@@ -181,6 +181,101 @@ void test_simple_read_async()
 
     TEST_ASSERT_EQUAL_UINT8(0x4, readByte);
 }
+
+// Test that we can do an async transaction, then a repeated start, then a transaction
+void test_repeated_async_to_transaction()
+{
+    // Set read address to 1
+    uint8_t const readAddr = 0x01;
+    TEST_ASSERT_EQUAL(I2C::Result::ACK, i2c->transfer_and_wait(EEPROM_I2C_ADDRESS, reinterpret_cast<const char *>(&readAddr), 1,
+                                                               nullptr, 0,
+                                                               1s, true));
+
+    ThisThread::sleep_for(1ms);
+
+    // Read the byte back
+    uint8_t readByte = 0;
+    TEST_ASSERT_EQUAL(I2C::Result::ACK, i2c->read(EEPROM_I2C_ADDRESS | 1, reinterpret_cast<char *>(&readByte), 1));
+    TEST_ASSERT_EQUAL_UINT8(0x4, readByte);
+}
+
+// Test that we can do an async transaction, then a repeated start, then a single byte
+void test_repeated_async_to_single_byte()
+{
+    // Set read address to 1
+    uint8_t const readAddr = 0x01;
+    TEST_ASSERT_EQUAL(I2C::Result::ACK, i2c->transfer_and_wait(EEPROM_I2C_ADDRESS, reinterpret_cast<const char *>(&readAddr), 1,
+                                                               nullptr, 0,
+                                                               1s, true));
+
+    ThisThread::sleep_for(1ms);
+
+    // Read the byte
+    i2c->start();
+    TEST_ASSERT_EQUAL(I2C::Result::ACK, i2c->write_byte(EEPROM_I2C_ADDRESS | 1));
+    int readByte = i2c->read_byte(false);
+    i2c->stop();
+    TEST_ASSERT_EQUAL(0x4, readByte);
+}
+
+// Test that we can do a transaction, then a repeated start, then an async transaction
+void test_repeated_transaction_to_async()
+{
+    // Set read address to 1
+    uint8_t const readAddr = 0x01;
+    TEST_ASSERT_EQUAL(I2C::Result::ACK, i2c->write(EEPROM_I2C_ADDRESS, reinterpret_cast<const char *>(&readAddr), 1, true));
+
+    // Read the byte
+    uint8_t readByte = 0;
+    TEST_ASSERT_EQUAL(I2C::Result::ACK, i2c->transfer_and_wait(EEPROM_I2C_ADDRESS, nullptr, 0,
+                                                               reinterpret_cast<char *>(&readByte), 1,
+                                                               1s));
+
+    TEST_ASSERT_EQUAL_UINT8(0x4, readByte);
+}
+
+// Test that we can do a transaction, then a repeated start, then an async transaction
+void test_repeated_single_byte_to_async()
+{
+    // Set read address to 1
+    i2c->start();
+    TEST_ASSERT_EQUAL(I2C::Result::ACK, i2c->write_byte(EEPROM_I2C_ADDRESS));
+    TEST_ASSERT_EQUAL(I2C::Result::ACK, i2c->write_byte(0x1)); // address
+    // Do NOT call stop() so that we do a repeated start
+
+    // Read the byte
+    uint8_t readByte = 0;
+    TEST_ASSERT_EQUAL(I2C::Result::ACK, i2c->transfer_and_wait(EEPROM_I2C_ADDRESS, nullptr, 0,
+                                                               reinterpret_cast<char *>(&readByte), 1,
+                                                               1s));
+
+    TEST_ASSERT_EQUAL_UINT8(0x4, readByte);
+}
+
+volatile bool threadRan = false;
+void background_thread_func()
+{
+    threadRan = true;
+}
+
+// Test that the main thread actually goes to sleep when we do an async I2C operation.
+void async_causes_thread_to_sleep()
+{
+    Thread backgroundThread(osPriorityBelowNormal); // this ensures that the thread will not run unless the main thread is blocked.
+    backgroundThread.start(callback(background_thread_func));
+
+    uint8_t const readAddr = 0x01;
+    uint8_t readByte = 0;
+    TEST_ASSERT_EQUAL(I2C::Result::ACK, i2c->transfer_and_wait(EEPROM_I2C_ADDRESS, reinterpret_cast<const char *>(&readAddr), 1,
+                                                               reinterpret_cast<char *>(&readByte), 1,
+                                                               1s));
+
+    TEST_ASSERT_EQUAL_UINT8(0x4, readByte);
+    TEST_ASSERT(threadRan);
+
+    backgroundThread.join();
+}
+
 #endif
 
 utest::v1::status_t test_setup(const size_t number_of_cases)
@@ -216,10 +311,12 @@ Case cases[] = {
         Case("Mixed Usage - Transaction -> repeated -> Single Byte", test_repeated_transaction_to_single_byte),
         ADD_ASYNC_TEST(Case("Simple Write - Async", test_simple_write_async))
         ADD_ASYNC_TEST(Case("Simple Read - Async", test_simple_read_async))
+        ADD_ASYNC_TEST(Case("Mixed Usage - Async -> repeated -> Transaction", test_repeated_async_to_transaction))
+        ADD_ASYNC_TEST(Case("Mixed Usage - Async -> repeated -> Single Byte", test_repeated_async_to_single_byte))
+        ADD_ASYNC_TEST(Case("Mixed Usage - Transaction -> repeated -> Async", test_repeated_transaction_to_async))
+        ADD_ASYNC_TEST(Case("Mixed Usage - Single Byte -> repeated -> Async", test_repeated_single_byte_to_async))
+        ADD_ASYNC_TEST(Case("Async causes thread to sleep?", async_causes_thread_to_sleep))
 };
-
-// TODO: Test repeated start from each mode into each other mode
-// TODO: Test that another thread can execute during the async operation
 
 Specification specification(test_setup, cases, greentea_continue_handlers);
 
