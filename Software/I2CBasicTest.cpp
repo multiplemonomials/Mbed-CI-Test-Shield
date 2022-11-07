@@ -125,6 +125,38 @@ void test_simple_read_transaction()
     TEST_ASSERT_EQUAL_UINT8(0x3, readByte);
 }
 
+// Test that we can do a single byte, then a repeated start, then a transaction
+void test_repeated_single_byte_to_transaction()
+{
+    // Set read address to 1
+    i2c->start();
+    TEST_ASSERT_EQUAL(I2C::Result::ACK, i2c->write_byte(EEPROM_I2C_ADDRESS));
+    TEST_ASSERT_EQUAL(I2C::Result::ACK, i2c->write_byte(0x1)); // address
+    // Do NOT call stop() so that we do a repeated start
+
+    ThisThread::sleep_for(1ms);
+
+    // Read the byte back
+    uint8_t readByte = 0;
+    TEST_ASSERT_EQUAL(I2C::Result::ACK, i2c->read(EEPROM_I2C_ADDRESS | 1, reinterpret_cast<char *>(&readByte), 1));
+    TEST_ASSERT_EQUAL_UINT8(0x3, readByte);
+}
+
+// Test that we can do a transaction, then a repeated start, then a single byte
+void test_repeated_transaction_to_single_byte()
+{
+    // Set read address to 1
+    uint8_t const readAddr = 0x01;
+    TEST_ASSERT_EQUAL(I2C::Result::ACK, i2c->write(EEPROM_I2C_ADDRESS, reinterpret_cast<const char *>(&readAddr), 1, true));
+
+    // Read the byte
+    i2c->start();
+    TEST_ASSERT_EQUAL(I2C::Result::ACK, i2c->write_byte(EEPROM_I2C_ADDRESS | 1));
+    int readByte = i2c->read_byte(false);
+    i2c->stop();
+    TEST_ASSERT_EQUAL(0x3, readByte);
+}
+
 #if DEVICE_I2C_ASYNCH
 void test_simple_write_async()
 {
@@ -180,6 +212,8 @@ Case cases[] = {
         Case("Simple Read - Single Byte", test_simple_read_single_byte),
         Case("Simple Write - Transaction", test_simple_write_transaction),
         Case("Simple Read - Transaction", test_simple_read_transaction),
+        Case("Mixed Usage - Single Byte -> repeated -> Transaction", test_repeated_single_byte_to_transaction),
+        Case("Mixed Usage - Transaction -> repeated -> Single Byte", test_repeated_transaction_to_single_byte),
         ADD_ASYNC_TEST(Case("Simple Write - Async", test_simple_write_async))
         ADD_ASYNC_TEST(Case("Simple Read - Async", test_simple_read_async))
 };
