@@ -55,11 +55,19 @@ void test_incorrect_addr_single_byte()
 	TEST_ASSERT_EQUAL(I2C::Result::NACK, i2c->write_byte(0x20));
 	i2c->stop();
 }
-void test_incorrect_addr_transaction()
+void test_incorrect_addr_zero_len_transaction() // Special test for 0-length transactions because some HALs special case this
 {
-	i2c->start();
 	TEST_ASSERT_EQUAL(I2C::Result::NACK, i2c->write(0x20, nullptr, 0, false));
-	i2c->stop();
+}
+void test_incorrect_addr_write_transaction()
+{
+    uint8_t const data[2] = {0x01, 0x03}; // Writes 0x3 to address 1
+	TEST_ASSERT_EQUAL(I2C::Result::NACK, i2c->write(0x20, reinterpret_cast<const char *>(data), 2, false));
+}
+void test_incorrect_addr_read_transaction()
+{
+    uint8_t readByte = 0;
+	TEST_ASSERT_EQUAL(I2C::Result::NACK, i2c->read(EEPROM_I2C_ADDRESS | 1, reinterpret_cast<char *>(&readByte), 1));
 }
 
 #if DEVICE_I2C_ASYNCH
@@ -289,6 +297,12 @@ utest::v1::status_t test_setup(const size_t number_of_cases)
 	return verbose_test_setup_handler(number_of_cases);
 }
 
+void test_teardown(const size_t passed, const size_t failed, const failure_t failure)
+{
+    delete i2c;
+    return greentea_test_teardown_handler(passed, failed, failure);
+}
+
 // Macro to help with async tests (can only run them if the device has the I2C_ASYNCH feature)
 #if DEVICE_I2C_ASYNCH
 #define ADD_ASYNC_TEST(x) x,
@@ -301,7 +315,9 @@ Case cases[] = {
 		Case("Correct Address - Single Byte", test_correct_addr_single_byte),
 		Case("Correct Address - Transaction", test_correct_addr_transaction),
         Case("Incorrect Address - Single Byte", test_incorrect_addr_single_byte),
-		Case("Incorrect Address - Transaction", test_incorrect_addr_transaction),
+		Case("Incorrect Address - Zero Length Transaction", test_incorrect_addr_zero_len_transaction),
+        Case("Incorrect Address - Write Transaction", test_incorrect_addr_write_transaction),
+        Case("Incorrect Address - Read Transaction", test_incorrect_addr_read_transaction),
         ADD_ASYNC_TEST(Case("Incorrect Address - Async", test_incorrect_addr_async))
         Case("Simple Write - Single Byte", test_simple_write_single_byte),
         Case("Simple Read - Single Byte", test_simple_read_single_byte),
@@ -318,7 +334,7 @@ Case cases[] = {
         ADD_ASYNC_TEST(Case("Async causes thread to sleep?", async_causes_thread_to_sleep))
 };
 
-Specification specification(test_setup, cases, greentea_continue_handlers);
+Specification specification(test_setup, cases, test_teardown, greentea_continue_handlers);
 
 // Entry point into the tests
 int main()

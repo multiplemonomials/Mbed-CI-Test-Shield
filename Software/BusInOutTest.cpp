@@ -56,16 +56,16 @@ void businout_bidirectional_test(){
 	do
 	{
 		x = (x<<1) +1;
-		bio1.output();
 		bio1 = x;
-		thread_sleep_for(10);
-		bio2.input();
 		thread_sleep_for(10);
 		volatile int y = bio2.read();
 		DEBUG_PRINTF("\r\n*********\r\nvalue of x,bio is: 0x%x, 0x%x\r\n********\r\n",x,y);
 		TEST_ASSERT_MESSAGE(y == x,"Value read on bus does not equal value written. ");
 	}
 	while(x < 0b111);
+
+    bio1.input();
+    bio2.output();
 
 	x = 0x00;
 	do
@@ -74,10 +74,8 @@ void businout_bidirectional_test(){
 		bio2.output();
 		bio2 = x;
 		thread_sleep_for(10);
-		bio1.input();
-		thread_sleep_for(10);
 		volatile int y = bio1.read();
-		DEBUG_PRINTF("\r\n*********\r\nvalue of x,bio is: 0x%x, 0x%x\r\n********\r\n",x,y);
+		printf("\r\n*********\r\nvalue of x,bio is: 0x%x, 0x%x\r\n********\r\n",x,y);
 		TEST_ASSERT_MESSAGE(y == x,"Value read on bus does not equal value written. ");
 	}
 	while(x < 0b111);
@@ -95,7 +93,7 @@ void busin_to_out_test(){
 	{
 		x++;
 		bout.write(x);
-		DEBUG_PRINTF("\r\n*********\r\nvalue of bin,bout,x is: 0x%x, 0x%x, 0x%x\r\n********\r\n",bin.read(),bout.read(),x);
+		printf("\r\n*********\r\nvalue of bin,bout,x is: 0x%x, 0x%x, 0x%x\r\n********\r\n",bin.read(),bout.read(),x);
 		TEST_ASSERT_MESSAGE(bin.read() == bout.read(),"Value read on bin does not equal value written on bout. ")
 	}
 	while(x < 0b111);
