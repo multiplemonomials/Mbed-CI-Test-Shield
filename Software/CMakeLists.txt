@@ -47,8 +47,13 @@ mbed_greentea_add_test(
 )
 
 mbed_greentea_add_test(
-    TEST_NAME testshield-spi
-    TEST_SOURCES SPITest.cpp
+    TEST_NAME testshield-spi-basic
+    TEST_SOURCES SPIBasicTest.cpp
+)
+
+mbed_greentea_add_test(
+    TEST_NAME testshield-spi-microsd
+    TEST_SOURCES SPIMicroSDTest.cpp
     TEST_REQUIRED_LIBS mbed-storage-sd mbed-storage-fat
 )
 

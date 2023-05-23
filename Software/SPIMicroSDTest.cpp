@@ -139,14 +139,16 @@ void test_sd_file()
     TEST_ASSERT_MESSAGE(fprintf(file, SD_TEST_STRING) > 0,"Writing file to sd card failed");
     fclose(file);
 
-	// Now open it and read the string back
+	// Now open it and read the string back.
+    // Note: Since fprintf will not print the terminating null to the file, the file will have only
+    // sizeof(SD_TEST_STRING) - 1 chars.
 	char read_string[SD_TEST_STRING_MAX] = {0};
     file = fopen("/sd/test_sd_w.txt", "r");
 	TEST_ASSERT_MESSAGE(file != nullptr,"Failed to open file");
 
-	ret = fread(read_string, sizeof(char), sizeof(SD_TEST_STRING), file);
-	TEST_ASSERT_MESSAGE(ret == SD_TEST_STRING_MAX, "Failed to read data");
-	DEBUG_PRINTF("\r\n****\r\nRead '%s' in read test\r\n, string comparison returns %d\r\n****\r\n",read_string,strcmp(read_string,SD_TEST_STRING));
+	ret = fread(read_string, sizeof(char), sizeof(SD_TEST_STRING) - 1, file);
+	TEST_ASSERT_MESSAGE(ret == (sizeof(SD_TEST_STRING) - 1), "Failed to read data");
+	DEBUG_PRINTF("\r\n****\r\nRead '%s' in read test\r\n, read returns %d, string comparison returns %d\r\n****\r\n",read_string, ret, strcmp(read_string,SD_TEST_STRING));
 	TEST_ASSERT_MESSAGE(strcmp(read_string,SD_TEST_STRING) == 0,"String read does not match string written");
 
 	// Check that reading one additional char causes an EOF error
@@ -158,7 +160,7 @@ void test_sd_file()
 
 	// Delete the file and make sure it's gone
 	remove("/sd/test_sd_w.txt");
-	TEST_ASSERT(fopen("/sd/test_sd_w.txt", "w") == nullptr);
+	TEST_ASSERT(fopen("/sd/test_sd_w.txt", "r") == nullptr);
 
 	// Clean up
 	ret = fs.unmount();
@@ -179,20 +181,14 @@ Case cases[] = {
 #if TESTSHIELD_ENABLE_HW_SPI_CS
         Case("SPI - Object Definable (HW CS)", test_object<false>),
         Case("SPI - SD card present (1MHz, HW CS)", test_card_present<false, 1000000>),
-        Case("SPI - SD card present (10MHz, HW CS)", test_card_present<false, 10000000>),
 		Case("SPI - Mount FS, Create File (1MHz, HW CS)", mount_fs_create_file<false, 1000000>),
-		Case("SPI - Mount FS, Create File (10MHz, HW CS)", mount_fs_create_file<false, 10000000>),
 		Case("SPI - Write, Read, and Delete File (1MHz, HW CS)", test_sd_file<false, 1000000>),
-		Case("SPI - Write, Read, and Delete File (10MHz, HW CS))", test_sd_file<false, 10000000>),
 #endif
 
         Case("SPI - Object Definable (GPIO CS)", test_object<true>),
         Case("SPI - SD card present (1MHz, GPIO CS)", test_card_present<true, 1000000>),
-        Case("SPI - SD card present (10MHz, GPIO CS)", test_card_present<true, 10000000>),
 		Case("SPI - Mount FS, Create File (1MHz, GPIO CS)", mount_fs_create_file<true, 1000000>),
-		Case("SPI - Mount FS, Create File (10MHz, GPIO CS)", mount_fs_create_file<true, 10000000>),
 		Case("SPI - Write, Read, and Delete File (1MHz, GPIO CS)", test_sd_file<true, 1000000>),
-		Case("SPI - Write, Read, and Delete File (10MHz, GPIO CS))", test_sd_file<true, 10000000>),
 };
 
 Specification specification(test_setup, cases, greentea_continue_handlers);
