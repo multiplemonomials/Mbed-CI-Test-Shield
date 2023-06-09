@@ -120,6 +120,9 @@
         "NUCLEO_L45RE_P": {
             "app.TESTSHIELD_ENABLE_HW_SPI_CS": 0
         },
+        "NUCLEO_H743ZI2": {
+            "app.TESTSHIELD_ENABLE_HW_SPI_CS": 0
+        },
         "STM32L452xE": {
             "target.clock_source": "USE_PLL_HSI"
         }

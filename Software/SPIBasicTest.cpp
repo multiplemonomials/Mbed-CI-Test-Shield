@@ -24,6 +24,7 @@
 #include "unity.h"
 #include "utest.h"
 #include "ci_test_config.h"
+#include <cinttypes>
 
 using namespace utest::v1;
 
@@ -55,9 +56,15 @@ void write_transactional_tx_only()
     spi->write(messageBytes, sizeof(messageBytes), nullptr, 0);
 }
 
+void write_transactional_rx_only()
+{
+    uint8_t rxBytes[sizeof(messageBytes)] {};
+    spi->write(nullptr, 0, rxBytes, sizeof(messageBytes));
+}
+
 void write_transactional_tx_rx()
 {
-    uint8_t rxBytes[sizeof(messageBytes)];
+    uint8_t rxBytes[sizeof(messageBytes)] {};
     spi->write(messageBytes, sizeof(messageBytes), rxBytes, sizeof(messageBytes));
 }
 
@@ -67,15 +74,27 @@ template<DMAUsage dmaUsage>
 void write_async_tx_only()
 {
     spi->set_dma_usage(dmaUsage);
-    spi->transfer_and_wait<uint8_t>(messageBytes, sizeof(messageBytes), nullptr, 0);
+    auto ret = spi->transfer_and_wait<uint8_t>(messageBytes, sizeof(messageBytes), nullptr, 0, 1s);
+    TEST_ASSERT_EQUAL(ret, 0);
+}
+
+template<DMAUsage dmaUsage>
+void write_async_rx_only()
+{
+    spi->set_dma_usage(dmaUsage);
+    uint8_t rxBytes[sizeof(messageBytes)]{};
+    auto ret = spi->transfer_and_wait<uint8_t>(nullptr, 0, rxBytes, sizeof(messageBytes), 1s);
+    TEST_ASSERT_EQUAL(ret, 0);
+    printf("Got: %hhx %hhx %hhx %hhx\n", rxBytes[0], rxBytes[1], rxBytes[2], rxBytes[3]);
 }
 
 template<DMAUsage dmaUsage>
 void write_async_tx_rx()
 {
     spi->set_dma_usage(dmaUsage);
-    uint8_t rxBytes[sizeof(messageBytes)];
-    spi->transfer_and_wait(messageBytes, sizeof(messageBytes), rxBytes, sizeof(messageBytes));
+    uint8_t rxBytes[sizeof(messageBytes)]{};
+    auto ret = spi->transfer_and_wait(messageBytes, sizeof(messageBytes), rxBytes, sizeof(messageBytes), 1s);
+    TEST_ASSERT_EQUAL(ret, 0);
     printf("Got: %hhx %hhx %hhx %hhx\n", rxBytes[0], rxBytes[1], rxBytes[2], rxBytes[3]);
 }
 
@@ -151,14 +170,17 @@ void test_teardown(const size_t passed, const size_t failed, const failure_t fai
 Case cases[] = {
         Case("Send Data via Single Byte API", write_single_byte),
         Case("Send Data via Transactional API (Tx only)", write_transactional_tx_only),
+        Case("Send Data via Transactional API (Rx only)", write_transactional_rx_only),
         Case("Send Data via Transactional API (Tx/Rx)", write_transactional_tx_rx),
 #if DEVICE_SPI_ASYNCH
 // TODO transaction aborting test
 // TODO multi-transaction queueing test
         Case("Send Data via Async Interrupt API (Tx only)", write_async_tx_only<DMA_USAGE_NEVER>),
+        Case("Send Data via Async Interrupt API (Rx only)", write_async_rx_only<DMA_USAGE_NEVER>),
         Case("Send Data via Async Interrupt API (Tx/Rx)", write_async_tx_rx<DMA_USAGE_NEVER>),
         Case("Benchmark Async SPI via Interrupts", benchmark_async_transaction<DMA_USAGE_NEVER>),
         Case("Send Data via Async DMA API (Tx only)", write_async_tx_only<DMA_USAGE_ALWAYS>),
+        Case("Send Data via Async DMA API (Rx only)", write_async_rx_only<DMA_USAGE_ALWAYS>),
         Case("Send Data via Async DMA API (Tx/Rx)", write_async_tx_rx<DMA_USAGE_ALWAYS>),
         Case("Benchmark Async SPI via DMA", benchmark_async_transaction<DMA_USAGE_NEVER>),
 #endif

@@ -3,4 +3,4 @@
 	url = https://github.com/mbed-ce/mbed-os.git
 [submodule "Software/pyBusPirateLite"]
 	path = Software/pyBusPirateLite
-	url = https://github.com/juhasch/pyBusPirateLite.git
+	url = https://github.com/mbed-ce/pyBusPirateLite.git
