@@ -49,6 +49,7 @@ mbed_greentea_add_test(
 mbed_greentea_add_test(
     TEST_NAME testshield-spi-basic
     TEST_SOURCES SPIBasicTest.cpp
+	HOST_TESTS_DIR host_tests
 )
 
 mbed_greentea_add_test(

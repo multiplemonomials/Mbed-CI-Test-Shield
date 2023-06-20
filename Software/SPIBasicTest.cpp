@@ -34,38 +34,187 @@ using namespace utest::v1;
 SPI * spi;
 
 // Bytes of the data message that each test sends
-uint8_t const messageBytes[] = {0x01, 0x02, 0x04, 0x08};
+uint8_t const standardMessageBytes[] = {0x01, 0x02, 0x04, 0x08};
+
+// Should produce the same wire data as above, but encoded as uint16s.
+// Note: regardless of endianness, SPI operates in MSB-first mode, so the most significant
+// digits will get clocked out first
+uint16_t const standardMessageUint16s[] = {0x0102, 0x0408};
+
+// Should produce the same data above, but encoded as uint32s
+uint32_t const standardMessageUint32 = 0x01020408;
+
+// Get the correct message pointer from the above arrays based on the word size
+inline void const * getMessage(size_t wordSize)
+{
+    switch(wordSize)
+    {
+        case sizeof(uint8_t):
+            return standardMessageBytes;
+        case sizeof(uint16_t):
+            return standardMessageUint16s;
+        case sizeof(uint32_t):
+            return &standardMessageUint32;
+        default:
+            return nullptr;
+    }
+}
 
 // Long data message used in a few tests
 uint8_t const longMessage[32] = {};
 
 const uint32_t spiFreq = 1000000;
+const uint8_t spiMode = 0;
 
-void write_single_byte()
+/*
+ * Wait for the next host message with the given key, and then assert that its
+ * value is expectedVal.
+ */
+void assert_next_message_from_host(char const * key, char const * expectedVal) {
+
+    // Based on the example code: https://os.mbed.com/docs/mbed-os/v6.16/debug-test/greentea-for-testing-applications.html
+    char receivedKey[64], receivedValue[64];
+    while (1) {
+        greentea_parse_kv(receivedKey, receivedValue, sizeof(receivedKey), sizeof(receivedValue));
+
+        if(strncmp(key, receivedKey, sizeof(receivedKey) - 1) == 0) {
+            TEST_ASSERT_EQUAL_STRING_LEN(expectedVal, receivedValue, sizeof(receivedKey) - 1);
+            break;
+        }
+    }
+}
+
+/*
+ * Uses the host test to start SPI logging from the device
+ */
+void host_start_spi_logging()
 {
+    // Note: Value is not important but cannot be empty
+    greentea_send_kv("start_recording_spi", "please");
+    assert_next_message_from_host("start_recording_spi", "complete");
+}
+
+/*
+ * Ask the host to print SPI data from the device
+ */
+void host_print_spi_data()
+{
+    // Note: Value is not important but cannot be empty
+    greentea_send_kv("print_spi_data", "please");
+    assert_next_message_from_host("print_spi_data", "complete");
+}
+
+/*
+ * Assert that the host machine has received the "standard message" over the SPI MOSI line
+ */
+void host_assert_standard_message()
+{
+    // Note: Value is not important but cannot be empty
+    greentea_send_kv("verify_standard_message", "please");
+    assert_next_message_from_host("verify_standard_message", "pass");
+}
+
+/*
+ * Uses the single-word API, transfers bytes
+ */
+void write_single_word_uint8()
+{
+    host_start_spi_logging();
+
+    spi->format(8, spiMode);
     spi->select();
-    for(size_t byteIdx = 0; byteIdx < sizeof(messageBytes); byteIdx++)
+    for(uint8_t word : standardMessageBytes)
     {
-        spi->write(messageBytes[byteIdx]);
+        spi->write(word);
     }
     spi->deselect();
+
+    host_assert_standard_message();
+    host_print_spi_data();
 }
 
+/*
+ * Uses the single-word API, transfers 16-bit words
+ */
+void write_single_word_uint16()
+{
+    host_start_spi_logging();
+
+    spi->format(16, spiMode);
+    spi->select();
+    for(uint16_t word : standardMessageUint16s)
+    {
+        spi->write(word);
+    }
+    spi->deselect();
+
+    host_assert_standard_message();
+    host_print_spi_data();
+}
+
+/*
+ * Uses the single-word API, transfers 32-bit words
+ */
+void write_single_word_uint32()
+{
+    host_start_spi_logging();
+
+    spi->format(32, spiMode);
+    spi->select();
+    spi->write(standardMessageUint32);
+    spi->deselect();
+
+    host_assert_standard_message();
+    host_print_spi_data();
+}
+
+/*
+ * This test writes data in the Tx direction only using the transactional API.
+ * Data is verified by the test shield logic analyzer.
+ */
+template<typename Word>
 void write_transactional_tx_only()
 {
-    spi->write(messageBytes, sizeof(messageBytes), nullptr, 0);
+    host_start_spi_logging();
+    spi->format(sizeof(Word) * 8, spiMode);
+    spi->write<Word>(reinterpret_cast<Word const *>(getMessage(sizeof(Word))),
+               sizeof(standardMessageBytes),
+               nullptr,
+               0);
+    host_assert_standard_message();
+    host_print_spi_data();
 }
 
+/*
+ * This test reads data in the Rx direction only using the transactional API.
+ * Data is not verified, this is just a "did it crash" smoke test.
+ */
+template<typename Word>
 void write_transactional_rx_only()
 {
-    uint8_t rxBytes[sizeof(messageBytes)] {};
-    spi->write(nullptr, 0, rxBytes, sizeof(messageBytes));
+    host_start_spi_logging();
+    spi->format(sizeof(Word) * 8, spiMode);
+    char rxBytes[sizeof(standardMessageBytes) / sizeof(Word)] {};
+    spi->write(nullptr, 0, rxBytes, sizeof(standardMessageBytes));
+    host_print_spi_data();
 }
 
+/*
+ * This test does a bidirectional transfer using the transactional API.
+ * MOSI data is verified by the test shield logic analyzer.
+ */
+template<typename Word>
 void write_transactional_tx_rx()
 {
-    uint8_t rxBytes[sizeof(messageBytes)] {};
-    spi->write(messageBytes, sizeof(messageBytes), rxBytes, sizeof(messageBytes));
+    host_start_spi_logging();
+    spi->format(sizeof(Word) * 8, spiMode);
+    Word rxBytes[sizeof(standardMessageBytes) / sizeof(Word)] {};
+    spi->write(reinterpret_cast<Word const *>(getMessage(sizeof(Word))),
+               sizeof(standardMessageBytes),
+               rxBytes,
+               sizeof(standardMessageBytes));
+    host_assert_standard_message();
+    host_print_spi_data();
 }
 
 #if DEVICE_SPI_ASYNCH
@@ -73,29 +222,38 @@ void write_transactional_tx_rx()
 template<DMAUsage dmaUsage>
 void write_async_tx_only()
 {
+    host_start_spi_logging();
+    spi->format(8, spiMode);
     spi->set_dma_usage(dmaUsage);
-    auto ret = spi->transfer_and_wait<uint8_t>(messageBytes, sizeof(messageBytes), nullptr, 0, 1s);
+    auto ret = spi->transfer_and_wait<uint8_t>(standardMessageBytes, sizeof(standardMessageBytes), nullptr, 0, 1s);
     TEST_ASSERT_EQUAL(ret, 0);
+    host_assert_standard_message();
+    host_print_spi_data();
 }
 
 template<DMAUsage dmaUsage>
 void write_async_rx_only()
 {
+    host_start_spi_logging();
     spi->set_dma_usage(dmaUsage);
-    uint8_t rxBytes[sizeof(messageBytes)]{};
-    auto ret = spi->transfer_and_wait<uint8_t>(nullptr, 0, rxBytes, sizeof(messageBytes), 1s);
+    uint8_t rxBytes[sizeof(standardMessageBytes)]{};
+    auto ret = spi->transfer_and_wait<uint8_t>(nullptr, 0, rxBytes, sizeof(standardMessageBytes), 1s);
     TEST_ASSERT_EQUAL(ret, 0);
     printf("Got: %hhx %hhx %hhx %hhx\n", rxBytes[0], rxBytes[1], rxBytes[2], rxBytes[3]);
+    host_print_spi_data();
 }
 
 template<DMAUsage dmaUsage>
 void write_async_tx_rx()
 {
+    host_start_spi_logging();
     spi->set_dma_usage(dmaUsage);
-    uint8_t rxBytes[sizeof(messageBytes)]{};
-    auto ret = spi->transfer_and_wait(messageBytes, sizeof(messageBytes), rxBytes, sizeof(messageBytes), 1s);
+    uint8_t rxBytes[sizeof(standardMessageBytes)]{};
+    auto ret = spi->transfer_and_wait(standardMessageBytes, sizeof(standardMessageBytes), rxBytes, sizeof(standardMessageBytes), 1s);
     TEST_ASSERT_EQUAL(ret, 0);
     printf("Got: %hhx %hhx %hhx %hhx\n", rxBytes[0], rxBytes[1], rxBytes[2], rxBytes[3]);
+    host_assert_standard_message();
+    host_print_spi_data();
 }
 
 /*
@@ -145,7 +303,6 @@ utest::v1::status_t test_setup(const size_t number_of_cases)
     // to actually respond.
     spi = new SPI(PIN_SPI_MOSI, PIN_SPI_MISO, PIN_SPI_SCLK, PIN_SPI_CS, use_gpio_ssel);
     spi->frequency(spiFreq);
-    spi->format(8, 0); // Mode 0, the bus pirate will be set for this
 
     // For starters, don't use DMA, but we will use it later
     spi->set_dma_usage(DMA_USAGE_NEVER);
@@ -157,7 +314,7 @@ utest::v1::status_t test_setup(const size_t number_of_cases)
     static DigitalOut cs(PIN_SPI_CS, 1);
 
     // Setup Greentea using a reasonable timeout in seconds
-    GREENTEA_SETUP(20, "default_auto");
+    GREENTEA_SETUP(20, "spi_basic_test");
     return verbose_test_setup_handler(number_of_cases);
 }
 
@@ -168,10 +325,29 @@ void test_teardown(const size_t passed, const size_t failed, const failure_t fai
 }
 
 Case cases[] = {
-        Case("Send Data via Single Byte API", write_single_byte),
-        Case("Send Data via Transactional API (Tx only)", write_transactional_tx_only),
-        Case("Send Data via Transactional API (Rx only)", write_transactional_rx_only),
-        Case("Send Data via Transactional API (Tx/Rx)", write_transactional_tx_rx),
+        Case("Send 8 Bit Data via Single Word API", write_single_word_uint8),
+        Case("Send 16 Bit Data via Single Word API", write_single_word_uint16),
+#if DEVICE_SPI_32BIT_WORDS
+        Case("Send 32 Bit Data via Single Word API", write_single_word_uint32),
+#endif
+        Case("Send 8 Bit Data via Transactional API (Tx only)", write_transactional_tx_only<uint8_t>),
+        Case("Send 16 Bit Data via Transactional API (Tx only)", write_transactional_tx_only<uint16_t>),
+#if DEVICE_SPI_32BIT_WORDS
+        Case("Send 32 Bit Data via Transactional API (Tx only)", write_transactional_tx_only<uint32_t>),
+#endif
+
+        Case("Read Data via Transactional API (Rx only)", write_transactional_rx_only<uint8_t>),
+        Case("Read Data via Transactional API (Rx only)", write_transactional_rx_only<uint16_t>),
+#if DEVICE_SPI_32BIT_WORDS
+        Case("Read Data via Transactional API (Rx only)", write_transactional_rx_only<uint32_t>),
+#endif
+
+        Case("Transfer Data via Transactional API (Tx/Rx)", write_transactional_tx_rx<uint8_t>),
+        Case("Transfer Data via Transactional API (Tx/Rx)", write_transactional_tx_rx<uint16_t>),
+#if DEVICE_SPI_32BIT_WORDS
+        Case("Transfer Data via Transactional API (Tx/Rx)", write_transactional_tx_rx<uint32_t>),
+#endif
+
 #if DEVICE_SPI_ASYNCH
 // TODO transaction aborting test
 // TODO multi-transaction queueing test

@@ -99,14 +99,13 @@
             "value": "0"
         }
     },
-
-
     "target_overrides": {
         "*": {
             "platform.stdio-baud-rate": 115200,
             "platform.stdio-buffered-serial": 1,
 			"target.components_add" : ["SD", "I2CEE"],
-            "sd.CRC_ENABLED": 1
+            "sd.CRC_ENABLED": 1,
+            "drivers.spi_transaction_queue_len": 3
         },
         "ARDUINO_NANO33BLE": {
             "sd.SPI_CS": "D10",
