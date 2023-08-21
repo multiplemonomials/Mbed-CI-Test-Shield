@@ -60,8 +60,12 @@ inline void const * getMessage(size_t wordSize)
     }
 }
 
-// Long data message used in a few tests
-uint8_t const longMessage[32] = {};
+// Long data message used in a few tests.  Starts with a recognizeable pattern.
+uint8_t const longMessage[32] = {0x01, 0x02, };
+
+// Buffers to receive data into during long message tests
+uint8_t logMessageRxData1[sizeof(longMessage)];
+uint8_t logMessageRxData2[sizeof(longMessage)];
 
 const uint32_t spiFreq = 1000000;
 const uint8_t spiMode = 0;
@@ -256,9 +260,73 @@ void write_async_tx_rx()
     host_print_spi_data();
 }
 
+template<DMAUsage dmaUsage>
+void async_queue_and_abort()
+{
+    host_start_spi_logging();
+
+    // Change SPI frequency to run at a lower rate, so we have more time for the test.
+    // At 100kHz, it will take 2.56ms to transmit 32 bytes of data.
+    spi->frequency(100000);
+
+    spi->format(8, spiMode);
+    spi->set_dma_usage(dmaUsage);
+
+    // Fill buffers with a specific pattern.
+    // The data that we'll get off the line is arbitrary but it will overwrite this pattern
+    // so we can tell how much of each buffer was written.
+    const uint8_t TEST_PATTERN = 0xAF;
+    memset(logMessageRxData1, TEST_PATTERN, sizeof(longMessage));
+    memset(logMessageRxData2, TEST_PATTERN, sizeof(longMessage));
+
+    // Set up a callback to save the value of the event, if delivered
+    volatile int callbackEvent1 = 0;
+    event_callback_t transferCallback1([&](int event) {
+        callbackEvent1 = event;
+    });
+
+    volatile int callbackEvent2 = 0;
+    event_callback_t transferCallback2([&](int event) {
+        callbackEvent2 = event;
+    });
+
+    // Start two transfers: one which we're going to abort, and one which we will allow to complete.
+    auto ret = spi->transfer(longMessage, sizeof(longMessage), logMessageRxData1, sizeof(longMessage), transferCallback1, SPI_EVENT_ALL);
+    TEST_ASSERT_EQUAL(ret, 0);
+    ret = spi->transfer(longMessage, sizeof(longMessage), logMessageRxData2, sizeof(longMessage), transferCallback2, SPI_EVENT_ALL);
+    TEST_ASSERT_EQUAL(ret, 0);
+
+    // Allow enough time for a few bytes of the first transfer to be sent
+    wait_us(100);
+
+    // Now cancel the first transfer
+    spi->abort_transfer();
+
+    // Allow the second transfer to run to completion
+    rtos::ThisThread::sleep_for(5ms);
+
+    // The first transfer should have been canceled after writing at least one byte but before filling the entire Rx buffer
+    size_t testPatternCountBuf1 = std::count(std::begin(logMessageRxData1), std::end(logMessageRxData1), TEST_PATTERN);
+    TEST_ASSERT(testPatternCountBuf1 > 0);
+    TEST_ASSERT(testPatternCountBuf1 < sizeof(longMessage));
+
+    // The second transfer should have overwritten the entire Rx buffer
+    size_t testPatternCountBuf2 = std::count(std::begin(logMessageRxData2), std::end(logMessageRxData2), TEST_PATTERN);
+    TEST_ASSERT_EQUAL(testPatternCountBuf2, 0);
+
+    // The first transfer should have delivered no flags.
+    // The second transfer should have delivered a completion flag.
+    TEST_ASSERT_EQUAL(callbackEvent1, 0);
+    TEST_ASSERT_EQUAL(callbackEvent2, SPI_EVENT_COMPLETE);
+
+    host_print_spi_data();
+    greentea_send_kv("verify_queue_and_abort_test", "please");
+    assert_next_message_from_host("verify_queue_and_abort_test", "pass");
+}
+
 /*
- * This test measures how long it takes to do an asynchronous transaction and how much of that time is spent
- *
+ * This test measures how long it takes to do an asynchronous transaction and how much of that time may
+ * be used to execute a foreground thread.
  */
 template<DMAUsage dmaUsage>
 void benchmark_async_transaction()
@@ -349,16 +417,16 @@ Case cases[] = {
 #endif
 
 #if DEVICE_SPI_ASYNCH
-// TODO transaction aborting test
-// TODO multi-transaction queueing test
         Case("Send Data via Async Interrupt API (Tx only)", write_async_tx_only<DMA_USAGE_NEVER>),
         Case("Send Data via Async Interrupt API (Rx only)", write_async_rx_only<DMA_USAGE_NEVER>),
         Case("Send Data via Async Interrupt API (Tx/Rx)", write_async_tx_rx<DMA_USAGE_NEVER>),
         Case("Benchmark Async SPI via Interrupts", benchmark_async_transaction<DMA_USAGE_NEVER>),
+        Case("Queueing and Aborting Async SPI via Interrupts", async_queue_and_abort<DMA_USAGE_NEVER>),
         Case("Send Data via Async DMA API (Tx only)", write_async_tx_only<DMA_USAGE_ALWAYS>),
         Case("Send Data via Async DMA API (Rx only)", write_async_rx_only<DMA_USAGE_ALWAYS>),
         Case("Send Data via Async DMA API (Tx/Rx)", write_async_tx_rx<DMA_USAGE_ALWAYS>),
-        Case("Benchmark Async SPI via DMA", benchmark_async_transaction<DMA_USAGE_NEVER>),
+        Case("Benchmark Async SPI via DMA", benchmark_async_transaction<DMA_USAGE_ALWAYS>),
+        Case("Queueing and Aborting Async SPI via DMA", async_queue_and_abort<DMA_USAGE_ALWAYS>),
 #endif
 };
 

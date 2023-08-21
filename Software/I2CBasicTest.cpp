@@ -40,7 +40,6 @@ void test_correct_addr_single_byte()
 {
 	i2c->start();
 	TEST_ASSERT_EQUAL(I2C::Result::ACK, i2c->write_byte(EEPROM_I2C_ADDRESS));
-    //i2c->write_byte(0x20);
 	i2c->stop();
 }
 void test_correct_addr_transaction()
@@ -290,7 +289,7 @@ utest::v1::status_t test_setup(const size_t number_of_cases)
 {
 	// Create I2C
 	i2c = new I2C(PIN_I2C_SDA, PIN_I2C_SCL);
-	i2c->frequency(100000); // Use a lower frequency so that a logic analyzer can more easily capture what's up
+	i2c->frequency(50000); // Use a lower frequency so that a logic analyzer can more easily capture what's up
 
 	// Setup Greentea using a reasonable timeout in seconds
 	GREENTEA_SETUP(20, "default_auto");

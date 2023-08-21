@@ -1,9 +1,17 @@
 from mbed_host_tests import BaseHostTest
 from mbed_host_tests.host_tests_logger import HtrunLogger
-import pyBusPirateLite
 
 import traceback
 import binascii
+import sys
+import os
+
+# Import pyBusPirateLite from the local repo.  This requires messing a bit with sys.path.
+# Unfortunately there's no easy way to make the test runner add a directory to its module path...
+this_script_dir = os.path.dirname(__file__)
+sys.path.append(os.path.join(this_script_dir, "..", "pyBusPirateLite"))
+
+import pyBusPirateLite
 
 
 class SpiBasicTestHostTest(BaseHostTest):
@@ -64,6 +72,33 @@ class SpiBasicTestHostTest(BaseHostTest):
             self.logger.prn_err("Incorrect MOSI data.  Expected " + binascii.b2a_hex(standard_message).decode("ASCII"))
             self.send_kv('verify_standard_message', 'fail')
 
+    def _callback_verify_queue_and_abort_test(self, key: str, value: str, timestamp):
+        """
+        Verify that the current recorded SPI data matches the queueing and abort test
+        """
+
+        self.consume_spi_data()
+
+        data_valid = False
+
+        # We should see a block starting with \x01\x02, then less than 30 0 bytes.
+        # Then, we should see another \x01\x02 and then 30 0 bytes
+        messages = self.mosi_bytes.split(b"\x01")
+
+        if len(messages) == 3: # Note: 0 byte message will be seen at the start due to how split() works
+            print("Correct number of messages")
+            if messages[1][0] == 0x2 and len(messages[1]) < 31:
+                print("First message looks OK")
+                if messages[2][0] == 0x2 and len(messages[2]) == 31:
+                    print("Second message looks OK")
+                    data_valid = True
+
+        if data_valid:
+            self.send_kv('verify_queue_and_abort_test', 'pass')
+        else:
+            self.logger.prn_err("Incorrect MOSI data for queue and abort test")
+            self.send_kv('verify_queue_and_abort_test', 'fail')
+
     def _callback_print_spi_data(self, key: str, value: str, timestamp):
         """
         Called at the end of every test case.  Should print all accumulated BP SPI data
@@ -80,9 +115,9 @@ class SpiBasicTestHostTest(BaseHostTest):
 
         # Initialize bus pirate.  Fail the test if we can't find it.
         self.buspirate_spi = pyBusPirateLite.SPI(connect=False)
-        #self.buspirate_spi.serial_debug = True
+        self.buspirate_spi.serial_debug = True
         try:
-            self.buspirate_spi.connect(portname="COM4")
+            self.buspirate_spi.connect()
             self.buspirate_spi.config = pyBusPirateLite.SPI.CONFIG_DRIVERS_OPEN_DRAIN | \
                                         pyBusPirateLite.SPI.CONFIG_SAMPLE_TIME_MIDDLE | \
                                         pyBusPirateLite.SPI.CONFIG_CLOCK_PHASE_0 | \
@@ -95,6 +130,7 @@ class SpiBasicTestHostTest(BaseHostTest):
 
         self.register_callback('start_recording_spi', self._callback_start_recording_spi)
         self.register_callback('verify_standard_message', self._callback_verify_standard_message)
+        self.register_callback('verify_queue_and_abort_test', self._callback_verify_queue_and_abort_test)
         self.register_callback('print_spi_data', self._callback_print_spi_data)
 
         self.logger.prn_inf("SPI Basic Test host test setup complete.")

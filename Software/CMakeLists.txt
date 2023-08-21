@@ -56,6 +56,7 @@ mbed_greentea_add_test(
     TEST_NAME testshield-spi-microsd
     TEST_SOURCES SPIMicroSDTest.cpp
     TEST_REQUIRED_LIBS mbed-storage-sd mbed-storage-fat
+	HOST_TESTS_DIR host_tests
 )
 
 mbed_finalize_build()
