@@ -181,7 +181,7 @@ void write_transactional_tx_only()
 {
     host_start_spi_logging();
     spi->format(sizeof(Word) * 8, spiMode);
-    spi->write<Word>(reinterpret_cast<Word const *>(getMessage(sizeof(Word))),
+    spi->write(reinterpret_cast<Word const *>(getMessage(sizeof(Word))),
                sizeof(standardMessageBytes),
                nullptr,
                0);
@@ -221,6 +221,31 @@ void write_transactional_tx_rx()
     host_print_spi_data();
 }
 
+/*
+ * Tests that we can do operations on the bus using multiple SPI objects without weirdness
+ */
+void use_multiple_spi_objects()
+{
+    host_start_spi_logging();
+
+    auto * spi2 = new SPI(PIN_SPI_MOSI, PIN_SPI_MISO, PIN_SPI_SCLK, PIN_SPI_CS, use_gpio_ssel);
+    auto * spi3 = new SPI(PIN_SPI_MOSI, PIN_SPI_MISO, PIN_SPI_SCLK, PIN_SPI_CS, use_gpio_ssel);
+
+    for(SPI * spi : {spi, spi2, spi3})
+    {
+        spi->format(8, spiMode);
+        spi->frequency(spiFreq);
+    }
+
+    spi->write(standardMessageBytes, 1, nullptr, 0);
+    spi2->write(standardMessageBytes + 1, 1, nullptr, 0);
+    spi3->write(standardMessageBytes + 2, 1, nullptr, 0);
+    spi->write(standardMessageBytes + 3, 1, nullptr, 0);
+
+    host_assert_standard_message();
+    host_print_spi_data();
+}
+
 #if DEVICE_SPI_ASYNCH
 
 template<DMAUsage dmaUsage>
@@ -229,7 +254,7 @@ void write_async_tx_only()
     host_start_spi_logging();
     spi->format(8, spiMode);
     spi->set_dma_usage(dmaUsage);
-    auto ret = spi->transfer_and_wait<uint8_t>(standardMessageBytes, sizeof(standardMessageBytes), nullptr, 0, 1s);
+    auto ret = spi->transfer_and_wait(standardMessageBytes, sizeof(standardMessageBytes), nullptr, 0, 1s);
     TEST_ASSERT_EQUAL(ret, 0);
     host_assert_standard_message();
     host_print_spi_data();
@@ -241,7 +266,7 @@ void write_async_rx_only()
     host_start_spi_logging();
     spi->set_dma_usage(dmaUsage);
     uint8_t rxBytes[sizeof(standardMessageBytes)]{};
-    auto ret = spi->transfer_and_wait<uint8_t>(nullptr, 0, rxBytes, sizeof(standardMessageBytes), 1s);
+    auto ret = spi->transfer_and_wait(nullptr, 0, rxBytes, sizeof(standardMessageBytes), 1s);
     TEST_ASSERT_EQUAL(ret, 0);
     printf("Got: %hhx %hhx %hhx %hhx\n", rxBytes[0], rxBytes[1], rxBytes[2], rxBytes[3]);
     host_print_spi_data();
@@ -258,6 +283,45 @@ void write_async_tx_rx()
     printf("Got: %hhx %hhx %hhx %hhx\n", rxBytes[0], rxBytes[1], rxBytes[2], rxBytes[3]);
     host_assert_standard_message();
     host_print_spi_data();
+}
+
+/*
+ * This test measures how long it takes to do an asynchronous transaction and how much of that time may
+ * be used to execute a foreground thread.
+ */
+template<DMAUsage dmaUsage>
+void benchmark_async_transaction()
+{
+    spi->set_dma_usage(dmaUsage);
+
+    Timer transactionTimer;
+    Timer backgroundTimer;
+
+    volatile bool transactionDone = false;
+
+    event_callback_t transferCallback([&](int event) {
+        transactionDone = true;
+    });
+
+    // Kick off the transaction in the main thread
+    transactionTimer.start();
+    spi->transfer(longMessage, sizeof(longMessage), nullptr, 0, transferCallback);
+
+    // Now count how much time we have free while the transaction executes in the background
+    backgroundTimer.start();
+    while(!transactionDone)
+    {}
+    backgroundTimer.stop();
+    transactionTimer.stop();
+
+    printf("Transferred %zu bytes @ %" PRIu32 "kHz in %" PRIi64 "us, with %" PRIi64 "us occurring in the background.\n",
+           sizeof(longMessage), spiFreq / 1000,
+           std::chrono::duration_cast<std::chrono::microseconds>(transactionTimer.elapsed_time()).count(),
+           std::chrono::duration_cast<std::chrono::microseconds>(backgroundTimer.elapsed_time()).count());
+    auto oneClockPeriod = std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::duration<float>(1.0/spiFreq));
+    printf("Note: Based on the byte count and frequency, the theoretical best time for this SPI transaction is %" PRIi64 "us\n",
+            std::chrono::duration_cast<std::chrono::microseconds>(oneClockPeriod * sizeof(longMessage) * 8).count());
+    printf("Note: the above background time does not include overhead from interrupts, which may be significant.\n");
 }
 
 template<DMAUsage dmaUsage>
@@ -325,45 +389,36 @@ void async_queue_and_abort()
 }
 
 /*
- * This test measures how long it takes to do an asynchronous transaction and how much of that time may
- * be used to execute a foreground thread.
+ * Tests that we can do operations on the bus using multiple SPI objects without weirdness
+ * in asynchronous mode
  */
 template<DMAUsage dmaUsage>
-void benchmark_async_transaction()
+void async_use_multiple_spi_objects()
 {
-    spi->set_dma_usage(dmaUsage);
+    host_start_spi_logging();
 
-    Timer transactionTimer;
-    Timer backgroundTimer;
+    auto * spi2 = new SPI(PIN_SPI_MOSI, PIN_SPI_MISO, PIN_SPI_SCLK, PIN_SPI_CS, use_gpio_ssel);
+    auto * spi3 = new SPI(PIN_SPI_MOSI, PIN_SPI_MISO, PIN_SPI_SCLK, PIN_SPI_CS, use_gpio_ssel);
 
-    volatile bool transactionDone = false;
+    for(SPI * spi : {spi, spi2, spi3})
+    {
+        spi->format(8, spiMode);
+        spi->frequency(spiFreq);
+        spi->set_dma_usage(dmaUsage);
+    }
 
-    event_callback_t transferCallback([&](int event) {
-        transactionDone = true;
-    });
+    spi->transfer_and_wait(standardMessageBytes, 1, nullptr, 0);
+    spi2->transfer_and_wait(standardMessageBytes + 1, 1, nullptr, 0);
+    spi3->transfer_and_wait(standardMessageBytes + 2, 1, nullptr, 0);
+    spi->transfer_and_wait(standardMessageBytes + 3, 1, nullptr, 0);
 
-    // Kick off the transaction in the main thread
-    transactionTimer.start();
-    spi->transfer<uint8_t>(longMessage, sizeof(longMessage), nullptr, 0, transferCallback);
-
-    // Now count how much time we have free while the transaction executes in the background
-    backgroundTimer.start();
-    while(!transactionDone)
-    {}
-    backgroundTimer.stop();
-    transactionTimer.stop();
-
-    printf("Transferred %zu bytes @ %" PRIu32 "kHz in %" PRIi64 "us, with %" PRIi64 "us occurring in the background.\n",
-           sizeof(longMessage), spiFreq / 1000,
-           std::chrono::duration_cast<std::chrono::microseconds>(transactionTimer.elapsed_time()).count(),
-           std::chrono::duration_cast<std::chrono::microseconds>(backgroundTimer.elapsed_time()).count());
-    auto oneClockPeriod = std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::duration<float>(1.0/spiFreq));
-    printf("Note: Based on the byte count and frequency, the theoretical best time for this SPI transaction is %" PRIi64 "us\n",
-            std::chrono::duration_cast<std::chrono::microseconds>(oneClockPeriod * sizeof(longMessage) * 8).count());
-    printf("Note: the above background time does not include overhead from interrupts, which may be significant.\n");
+    host_assert_standard_message();
+    host_print_spi_data();
 }
 
 #endif
+
+// TODO test for sync & async fill characters
 
 utest::v1::status_t test_setup(const size_t number_of_cases)
 {
@@ -412,6 +467,7 @@ Case cases[] = {
 
         Case("Transfer Data via Transactional API (Tx/Rx)", write_transactional_tx_rx<uint8_t>),
         Case("Transfer Data via Transactional API (Tx/Rx)", write_transactional_tx_rx<uint16_t>),
+        Case("Use Multiple SPI Instances (synchronous API)", use_multiple_spi_objects),
 #if DEVICE_SPI_32BIT_WORDS
         Case("Transfer Data via Transactional API (Tx/Rx)", write_transactional_tx_rx<uint32_t>),
 #endif
@@ -422,11 +478,13 @@ Case cases[] = {
         Case("Send Data via Async Interrupt API (Tx/Rx)", write_async_tx_rx<DMA_USAGE_NEVER>),
         Case("Benchmark Async SPI via Interrupts", benchmark_async_transaction<DMA_USAGE_NEVER>),
         Case("Queueing and Aborting Async SPI via Interrupts", async_queue_and_abort<DMA_USAGE_NEVER>),
+        Case("Use Multiple SPI Instances with Interrupts", async_use_multiple_spi_objects<DMA_USAGE_NEVER>),
         Case("Send Data via Async DMA API (Tx only)", write_async_tx_only<DMA_USAGE_ALWAYS>),
         Case("Send Data via Async DMA API (Rx only)", write_async_rx_only<DMA_USAGE_ALWAYS>),
         Case("Send Data via Async DMA API (Tx/Rx)", write_async_tx_rx<DMA_USAGE_ALWAYS>),
         Case("Benchmark Async SPI via DMA", benchmark_async_transaction<DMA_USAGE_ALWAYS>),
         Case("Queueing and Aborting Async SPI via DMA", async_queue_and_abort<DMA_USAGE_ALWAYS>),
+        Case("Use Multiple SPI Instances with DMA", async_use_multiple_spi_objects<DMA_USAGE_ALWAYS>),
 #endif
 };
 
