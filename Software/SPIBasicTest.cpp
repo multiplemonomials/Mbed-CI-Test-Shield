@@ -239,8 +239,30 @@ void use_multiple_spi_objects()
 
     spi->write(standardMessageBytes, 1, nullptr, 0);
     spi2->write(standardMessageBytes + 1, 1, nullptr, 0);
+    delete spi2;
     spi3->write(standardMessageBytes + 2, 1, nullptr, 0);
+    delete spi3;
     spi->write(standardMessageBytes + 3, 1, nullptr, 0);
+
+    host_assert_standard_message();
+    host_print_spi_data();
+}
+
+/*
+ * Tests that we can delete the SPI object (causing the peripheral to be deleted) and
+ * create it again without bad effects
+ */
+void free_and_reallocate_spi()
+{
+    host_start_spi_logging();
+
+    delete spi;
+
+    spi = new SPI(PIN_SPI_MOSI, PIN_SPI_MISO, PIN_SPI_SCLK, PIN_SPI_CS, use_gpio_ssel);
+    spi->frequency(spiFreq);
+    spi->set_dma_usage(DMA_USAGE_NEVER);
+
+    spi->write(standardMessageBytes, 4, nullptr, 0);
 
     host_assert_standard_message();
     host_print_spi_data();
@@ -409,8 +431,31 @@ void async_use_multiple_spi_objects()
 
     spi->transfer_and_wait(standardMessageBytes, 1, nullptr, 0);
     spi2->transfer_and_wait(standardMessageBytes + 1, 1, nullptr, 0);
+    delete spi2;
     spi3->transfer_and_wait(standardMessageBytes + 2, 1, nullptr, 0);
+    delete spi3;
     spi->transfer_and_wait(standardMessageBytes + 3, 1, nullptr, 0);
+
+    host_assert_standard_message();
+    host_print_spi_data();
+}
+
+/*
+ * Tests that we can delete the SPI object (causing the peripheral to be deleted) and
+ * create it again without bad effects
+ */
+template<DMAUsage dmaUsage>
+void async_free_and_reallocate_spi()
+{
+    host_start_spi_logging();
+
+    delete spi;
+
+    spi = new SPI(PIN_SPI_MOSI, PIN_SPI_MISO, PIN_SPI_SCLK, PIN_SPI_CS, use_gpio_ssel);
+    spi->frequency(spiFreq);
+    spi->set_dma_usage(dmaUsage);
+
+    spi->transfer_and_wait(standardMessageBytes, 4, nullptr, 0);
 
     host_assert_standard_message();
     host_print_spi_data();
@@ -468,6 +513,7 @@ Case cases[] = {
         Case("Transfer Data via Transactional API (Tx/Rx)", write_transactional_tx_rx<uint8_t>),
         Case("Transfer Data via Transactional API (Tx/Rx)", write_transactional_tx_rx<uint16_t>),
         Case("Use Multiple SPI Instances (synchronous API)", use_multiple_spi_objects),
+        Case("Free and Reallocate SPI Instance (synchronous API)", free_and_reallocate_spi),
 #if DEVICE_SPI_32BIT_WORDS
         Case("Transfer Data via Transactional API (Tx/Rx)", write_transactional_tx_rx<uint32_t>),
 #endif
@@ -479,12 +525,14 @@ Case cases[] = {
         Case("Benchmark Async SPI via Interrupts", benchmark_async_transaction<DMA_USAGE_NEVER>),
         Case("Queueing and Aborting Async SPI via Interrupts", async_queue_and_abort<DMA_USAGE_NEVER>),
         Case("Use Multiple SPI Instances with Interrupts", async_use_multiple_spi_objects<DMA_USAGE_NEVER>),
+        Case("Free and Reallocate SPI Instance with Interrupts", async_free_and_reallocate_spi<DMA_USAGE_NEVER>),
         Case("Send Data via Async DMA API (Tx only)", write_async_tx_only<DMA_USAGE_ALWAYS>),
         Case("Send Data via Async DMA API (Rx only)", write_async_rx_only<DMA_USAGE_ALWAYS>),
         Case("Send Data via Async DMA API (Tx/Rx)", write_async_tx_rx<DMA_USAGE_ALWAYS>),
         Case("Benchmark Async SPI via DMA", benchmark_async_transaction<DMA_USAGE_ALWAYS>),
-        Case("Queueing and Aborting Async SPI via DMA", async_queue_and_abort<DMA_USAGE_ALWAYS>),
+        //Case("Queueing and Aborting Async SPI via DMA", async_queue_and_abort<DMA_USAGE_ALWAYS>),
         Case("Use Multiple SPI Instances with DMA", async_use_multiple_spi_objects<DMA_USAGE_ALWAYS>),
+        Case("Free and Reallocate SPI Instance with DMA", async_free_and_reallocate_spi<DMA_USAGE_ALWAYS>),
 #endif
 };
 

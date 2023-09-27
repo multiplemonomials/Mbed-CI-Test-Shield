@@ -115,7 +115,7 @@ class SpiBasicTestHostTest(BaseHostTest):
 
         # Initialize bus pirate.  Fail the test if we can't find it.
         self.buspirate_spi = pyBusPirateLite.SPI(connect=False)
-        self.buspirate_spi.serial_debug = True
+        self.buspirate_spi.serial_debug = False
         try:
             self.buspirate_spi.connect()
             self.buspirate_spi.config = pyBusPirateLite.SPI.CONFIG_DRIVERS_OPEN_DRAIN | \
