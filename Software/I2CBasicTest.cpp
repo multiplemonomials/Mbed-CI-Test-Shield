@@ -46,6 +46,11 @@ void test_correct_addr_transaction()
 {
 	TEST_ASSERT_EQUAL(I2C::Result::ACK, i2c->write(EEPROM_I2C_ADDRESS, nullptr, 0, false));
 }
+void test_correct_addr_read_transaction()
+{
+    uint8_t readByte = 0;
+	TEST_ASSERT_EQUAL(I2C::Result::ACK, i2c->read(EEPROM_I2C_ADDRESS | 1, reinterpret_cast<char *>(&readByte), 1));
+}
 
 // Test that we receive a NACK when trying to use an address that doesn't exist
 void test_incorrect_addr_single_byte()
@@ -66,7 +71,7 @@ void test_incorrect_addr_write_transaction()
 void test_incorrect_addr_read_transaction()
 {
     uint8_t readByte = 0;
-	TEST_ASSERT_EQUAL(I2C::Result::NACK, i2c->read(EEPROM_I2C_ADDRESS | 1, reinterpret_cast<char *>(&readByte), 1));
+	TEST_ASSERT_EQUAL(I2C::Result::NACK, i2c->read(0x20 | 1, reinterpret_cast<char *>(&readByte), 1));
 }
 
 #if DEVICE_I2C_ASYNCH
