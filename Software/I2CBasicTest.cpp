@@ -92,7 +92,8 @@ void test_simple_write_single_byte()
     // Write 0x2 to address 1
     i2c->start();
     TEST_ASSERT_EQUAL(I2C::Result::ACK, i2c->write_byte(EEPROM_I2C_ADDRESS));
-    TEST_ASSERT_EQUAL(I2C::Result::ACK, i2c->write_byte(0x1)); // address
+    TEST_ASSERT_EQUAL(I2C::Result::ACK, i2c->write_byte(0x0)); // address high
+    TEST_ASSERT_EQUAL(I2C::Result::ACK, i2c->write_byte(0x1)); // address low
     TEST_ASSERT_EQUAL(I2C::Result::ACK, i2c->write_byte(0x2)); // data
     i2c->stop();
 
@@ -105,7 +106,8 @@ void test_simple_read_single_byte()
     // Set read address to 1
     i2c->start();
     TEST_ASSERT_EQUAL(I2C::Result::ACK, i2c->write_byte(EEPROM_I2C_ADDRESS));
-    TEST_ASSERT_EQUAL(I2C::Result::ACK, i2c->write_byte(0x1)); // address
+    TEST_ASSERT_EQUAL(I2C::Result::ACK, i2c->write_byte(0x0)); // address high
+    TEST_ASSERT_EQUAL(I2C::Result::ACK, i2c->write_byte(0x1)); // address low
     // Do NOT call stop() so that we do a repeated start
 
     // Read the byte
@@ -118,8 +120,8 @@ void test_simple_read_single_byte()
 
 void test_simple_write_transaction()
 {
-    uint8_t const data[2] = {0x01, 0x03}; // Writes 0x3 to address 1
-    TEST_ASSERT_EQUAL(I2C::Result::ACK, i2c->write(EEPROM_I2C_ADDRESS, reinterpret_cast<const char *>(data), 2));
+    uint8_t const data[3] = {0x0, 0x01, 0x03}; // Writes 0x3 to address 1
+    TEST_ASSERT_EQUAL(I2C::Result::ACK, i2c->write(EEPROM_I2C_ADDRESS, reinterpret_cast<const char *>(data), sizeof(data)));
 
     // Maximum program time before the EEPROM responds again
     ThisThread::sleep_for(5ms);
@@ -128,8 +130,8 @@ void test_simple_write_transaction()
 void test_simple_read_transaction()
 {
     // Set read address to 1
-    uint8_t const readAddr = 0x01;
-    TEST_ASSERT_EQUAL(I2C::Result::ACK, i2c->write(EEPROM_I2C_ADDRESS, reinterpret_cast<const char *>(&readAddr), 1, true));
+    uint8_t const data[2] = {0x0, 0x01};
+    TEST_ASSERT_EQUAL(I2C::Result::ACK, i2c->write(EEPROM_I2C_ADDRESS, reinterpret_cast<const char *>(data), sizeof(data), true));
 
     // Read the byte back
     uint8_t readByte = 0;
@@ -143,7 +145,8 @@ void test_repeated_single_byte_to_transaction()
     // Set read address to 1
     i2c->start();
     TEST_ASSERT_EQUAL(I2C::Result::ACK, i2c->write_byte(EEPROM_I2C_ADDRESS));
-    TEST_ASSERT_EQUAL(I2C::Result::ACK, i2c->write_byte(0x1)); // address
+    TEST_ASSERT_EQUAL(I2C::Result::ACK, i2c->write_byte(0x0)); // address high
+    TEST_ASSERT_EQUAL(I2C::Result::ACK, i2c->write_byte(0x1)); // address low
     // Do NOT call stop() so that we do a repeated start
 
     ThisThread::sleep_for(1ms);
@@ -158,8 +161,8 @@ void test_repeated_single_byte_to_transaction()
 void test_repeated_transaction_to_single_byte()
 {
     // Set read address to 1
-    uint8_t const readAddr = 0x01;
-    TEST_ASSERT_EQUAL(I2C::Result::ACK, i2c->write(EEPROM_I2C_ADDRESS, reinterpret_cast<const char *>(&readAddr), 1, true));
+    uint8_t const data[2] = {0x0, 0x01};
+    TEST_ASSERT_EQUAL(I2C::Result::ACK, i2c->write(EEPROM_I2C_ADDRESS, reinterpret_cast<const char *>(data), sizeof(data), true));
 
     // Read the byte
     i2c->start();
@@ -172,9 +175,9 @@ void test_repeated_transaction_to_single_byte()
 #if DEVICE_I2C_ASYNCH
 void test_simple_write_async()
 {
-    uint8_t const data[2] = {0x01, 0x04}; // Writes 0x4 to address 1
+    uint8_t const data[3] = {0x0, 0x01, 0x04}; // Writes 0x4 to address 1
     TEST_ASSERT_EQUAL(I2C::Result::ACK, i2c->transfer_and_wait(EEPROM_I2C_ADDRESS,
-                                                               reinterpret_cast<const char *>(data), 2,
+                                                               reinterpret_cast<const char *>(data), sizeof(data),
                                                                nullptr, 0,
                                                                1s));
 
@@ -185,9 +188,9 @@ void test_simple_write_async()
 void test_simple_read_async()
 {
     // Set read address to 1, then read the data back in one fell swoop.
-    uint8_t const readAddr = 0x01;
+    uint8_t const writeData[2] = {0x0, 0x01};
     uint8_t readByte = 0;
-    TEST_ASSERT_EQUAL(I2C::Result::ACK, i2c->transfer_and_wait(EEPROM_I2C_ADDRESS, reinterpret_cast<const char *>(&readAddr), 1,
+    TEST_ASSERT_EQUAL(I2C::Result::ACK, i2c->transfer_and_wait(EEPROM_I2C_ADDRESS, reinterpret_cast<const char *>(writeData), sizeof(writeData),
                                                                reinterpret_cast<char *>(&readByte), 1,
                                                                1s));
 
@@ -198,8 +201,8 @@ void test_simple_read_async()
 void test_repeated_async_to_transaction()
 {
     // Set read address to 1
-    uint8_t const readAddr = 0x01;
-    TEST_ASSERT_EQUAL(I2C::Result::ACK, i2c->transfer_and_wait(EEPROM_I2C_ADDRESS, reinterpret_cast<const char *>(&readAddr), 1,
+    uint8_t const writeData[2] = {0x0, 0x01};
+    TEST_ASSERT_EQUAL(I2C::Result::ACK, i2c->transfer_and_wait(EEPROM_I2C_ADDRESS, reinterpret_cast<const char *>(&writeData), sizeof(writeData),
                                                                nullptr, 0,
                                                                1s, true));
 
@@ -215,8 +218,8 @@ void test_repeated_async_to_transaction()
 void test_repeated_async_to_single_byte()
 {
     // Set read address to 1
-    uint8_t const readAddr = 0x01;
-    TEST_ASSERT_EQUAL(I2C::Result::ACK, i2c->transfer_and_wait(EEPROM_I2C_ADDRESS, reinterpret_cast<const char *>(&readAddr), 1,
+    uint8_t const writeData[2] = {0x0, 0x01};
+    TEST_ASSERT_EQUAL(I2C::Result::ACK, i2c->transfer_and_wait(EEPROM_I2C_ADDRESS, reinterpret_cast<const char *>(&writeData), sizeof(writeData),
                                                                nullptr, 0,
                                                                1s, true));
 
@@ -234,8 +237,8 @@ void test_repeated_async_to_single_byte()
 void test_repeated_transaction_to_async()
 {
     // Set read address to 1
-    uint8_t const readAddr = 0x01;
-    TEST_ASSERT_EQUAL(I2C::Result::ACK, i2c->write(EEPROM_I2C_ADDRESS, reinterpret_cast<const char *>(&readAddr), 1, true));
+    uint8_t const writeData[2] = {0x0, 0x01};
+    TEST_ASSERT_EQUAL(I2C::Result::ACK, i2c->write(EEPROM_I2C_ADDRESS, reinterpret_cast<const char *>(writeData), sizeof(writeData), true));
 
     // Read the byte
     uint8_t readByte = 0;
@@ -252,7 +255,8 @@ void test_repeated_single_byte_to_async()
     // Set read address to 1
     i2c->start();
     TEST_ASSERT_EQUAL(I2C::Result::ACK, i2c->write_byte(EEPROM_I2C_ADDRESS));
-    TEST_ASSERT_EQUAL(I2C::Result::ACK, i2c->write_byte(0x1)); // address
+    TEST_ASSERT_EQUAL(I2C::Result::ACK, i2c->write_byte(0x0)); // address high
+    TEST_ASSERT_EQUAL(I2C::Result::ACK, i2c->write_byte(0x1)); // address low
     // Do NOT call stop() so that we do a repeated start
 
     // Read the byte
@@ -276,9 +280,9 @@ void async_causes_thread_to_sleep()
     Thread backgroundThread(osPriorityBelowNormal); // this ensures that the thread will not run unless the main thread is blocked.
     backgroundThread.start(callback(background_thread_func));
 
-    uint8_t const readAddr = 0x01;
+    uint8_t const writeData[2] = {0x0, 0x01};
     uint8_t readByte = 0;
-    TEST_ASSERT_EQUAL(I2C::Result::ACK, i2c->transfer_and_wait(EEPROM_I2C_ADDRESS, reinterpret_cast<const char *>(&readAddr), 1,
+    TEST_ASSERT_EQUAL(I2C::Result::ACK, i2c->transfer_and_wait(EEPROM_I2C_ADDRESS, reinterpret_cast<const char *>(writeData), sizeof(writeData),
                                                                reinterpret_cast<char *>(&readByte), 1,
                                                                1s));
 
@@ -343,8 +347,5 @@ Specification specification(test_setup, cases, test_teardown, greentea_continue_
 // Entry point into the tests
 int main()
 {
-	// Turn on I2C_EN pin to enable I2C data to the logic analyzer
-	DigitalOut i2cEn(PIN_I2C_EN, 1);
-
 	return !Harness::run(specification);
 }

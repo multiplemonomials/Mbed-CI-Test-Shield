@@ -88,7 +88,7 @@ void init_string()
 // Construct an SPI object in spiMemory
 SDBlockDevice * constructSDBlockDev(uint64_t spiFreq)
 {
-    return new (sdBlockDevMemory) SDBlockDevice(PIN_SPI_MOSI, PIN_SPI_MISO, PIN_SPI_SCLK, PIN_SPI_CS,spiFreq, true);
+    return new (sdBlockDevMemory) SDBlockDevice(PIN_SPI_MOSI, PIN_SPI_MISO, PIN_SPI_SCLK, PIN_SPI_SD_CS,spiFreq, true);
 }
 
 void destroySDBlockDev(SDBlockDevice * sdDev)
@@ -224,6 +224,11 @@ utest::v1::status_t test_setup(const size_t number_of_cases)
 {
     // Setup Greentea using a reasonable timeout in seconds
     GREENTEA_SETUP(40, "default_auto");
+
+    // Initialize logic analyzer for SPI pinouts
+    static BusOut funcSelPins(PIN_FUNC_SEL0, PIN_FUNC_SEL1, PIN_FUNC_SEL2);
+    funcSelPins = 0b010;
+
     return verbose_test_setup_handler(number_of_cases);
 }
 

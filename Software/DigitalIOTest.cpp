@@ -51,12 +51,12 @@ utest::v1::status_t test_setup(const size_t number_of_cases) {
 
 // Test cases
 Case cases[] = {
-    Case("Digital I/O BUSIN_0 -> BUSOUT_0", DigitalIO_Test<PIN_BUSOUT_0, PIN_BUSIN_0>),
-    Case("Digital I/O BUSOUT_0 -> BUSIN_0", DigitalIO_Test<PIN_BUSIN_0, PIN_BUSOUT_0>),
-    Case("Digital I/O BUSIN_1 -> BUSOUT_1", DigitalIO_Test<PIN_BUSOUT_1, PIN_BUSIN_1>),
-    Case("Digital I/O BUSOUT_1 -> BUSIN_1", DigitalIO_Test<PIN_BUSIN_1, PIN_BUSOUT_1>),
-    Case("Digital I/O BUSIN_2 -> BUSOUT_2", DigitalIO_Test<PIN_BUSOUT_2, PIN_BUSIN_2>),
-    Case("Digital I/O BUSOUT_2 -> BUSIN_2", DigitalIO_Test<PIN_BUSIN_2, PIN_BUSOUT_2>),
+    Case("Digital I/O GPIN_0 -> GPOUT_0", DigitalIO_Test<PIN_GPOUT_0, PIN_GPIN_0>),
+    Case("Digital I/O GPOUT_0 -> GPIN_0", DigitalIO_Test<PIN_GPIN_0, PIN_GPOUT_0>),
+    Case("Digital I/O GPIN_1 -> GPOUT_1", DigitalIO_Test<PIN_GPOUT_1, PIN_GPIN_1>),
+    Case("Digital I/O GPOUT_1 -> GPIN_1", DigitalIO_Test<PIN_GPIN_1, PIN_GPOUT_1>),
+    Case("Digital I/O GPIN_2 -> GPOUT_2", DigitalIO_Test<PIN_GPOUT_2, PIN_GPIN_2>),
+    Case("Digital I/O GPOUT_2 -> GPIN_2", DigitalIO_Test<PIN_GPIN_2, PIN_GPOUT_2>),
 };
 
 Specification specification(test_setup, cases, greentea_continue_handlers);

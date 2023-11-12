@@ -28,11 +28,11 @@
 
 using namespace utest::v1;
 
-// Configuration for 24FC02-I/SN
+// Configuration for 24FC64-I/SN
 #define EEPROM_I2C_ADDRESS 0xA0
-#define EEPROM_SIZE 2048
-#define EEPROM_BLOCK_SIZE 8
-#define EEPROM_ADDRESS_8_BIT true
+#define EEPROM_SIZE (64*1024)
+#define EEPROM_BLOCK_SIZE 32
+#define EEPROM_ADDRESS_8_BIT false
 
 // Fill array with random characters
 void init_string(char* buffer, int len)
@@ -45,8 +45,10 @@ void init_string(char* buffer, int len)
 	DEBUG_PRINTF("\r\n****\r\nBuffer Len = `%d`, String = `%s`\r\n****\r\n",len,buffer);
 }
 
-char test_string[EEPROM_SIZE];
-char read_string[EEPROM_SIZE];
+constexpr size_t MAX_TEST_SIZE = 2048;
+
+char test_string[MAX_TEST_SIZE];
+char read_string[MAX_TEST_SIZE];
 
 // Template to write arbitrary data to arbitrary address and check the data is written correctly
 template<uint32_t busSpeed, int size_of_data, int address>
@@ -135,16 +137,16 @@ Case cases[] = {
 		Case("I2C - 100kHz - EEPROM 2nd WR Single Byte",single_byte_WR<100000, 1025>),
 		Case("I2C - 100kHz - EEPROM WR 2 Bytes", flash_WR<100000, 2, 5>),
 		Case("I2C - 100kHz - EEPROM 2nd WR 2 Bytes",flash_WR<100000, 2, 1029>),
-		Case("I2C - 100kHz - EEPROM WR 10  Bytes",flash_WR<100000, 10, 100>),
-		Case("I2C - 100kHz - EEPROM 2nd WR 10  Bytes",flash_WR<100000, 10, 1124>),
-		Case("I2C - 100kHz - EEPROM WR Full Size",flash_WR<100000, EEPROM_SIZE, 0>),
+		Case("I2C - 100kHz - EEPROM WR 1 Page",flash_WR<100000, EEPROM_BLOCK_SIZE, 100>),
+		Case("I2C - 100kHz - EEPROM 2nd WR 1 Page",flash_WR<100000, EEPROM_BLOCK_SIZE, 1124>),
+		Case("I2C - 100kHz - EEPROM WR 2kiB",flash_WR<100000, MAX_TEST_SIZE, 0>),
 		Case("I2C - 400kHz - EEPROM WR Single Byte",single_byte_WR<400000, 1>),
 		Case("I2C - 400kHz - EEPROM 2nd WR Single Byte",single_byte_WR<400000, 1025>),
 		Case("I2C - 400kHz - EEPROM WR 2 Bytes", flash_WR<400000, 2, 5>),
 		Case("I2C - 400kHz - EEPROM 2nd WR 2 Bytes",flash_WR<400000, 2, 1029>),
-		Case("I2C - 400kHz - EEPROM WR 10  Bytes",flash_WR<400000, 10, 100>),
-		Case("I2C - 400kHz - EEPROM 2nd WR 10  Bytes",flash_WR<400000, 10, 1124>),
-		Case("I2C - 400kHz - EEPROM WR Full Size",flash_WR<400000, EEPROM_SIZE, 0>),
+		Case("I2C - 400kHz - EEPROM WR 1 Page",flash_WR<400000, EEPROM_BLOCK_SIZE, 100>),
+		Case("I2C - 400kHz - EEPROM 2nd WR 1 Page",flash_WR<400000, EEPROM_BLOCK_SIZE, 1124>),
+		Case("I2C - 400kHz - EEPROM WR 2kiB",flash_WR<400000, MAX_TEST_SIZE, 0>),
 };
 
 Specification specification(test_setup, cases, greentea_continue_handlers);

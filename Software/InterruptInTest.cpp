@@ -96,12 +96,12 @@ utest::v1::status_t greentea_failure_handler(const Case *const source, const fai
 
 // Test cases
 Case cases[] = {
-		Case("Interrupt from BUSOUT_2 -> BUSIN_2", InterruptInTest<PIN_BUSIN_2,PIN_BUSOUT_2>,greentea_failure_handler),
-		Case("Interrupt from BUSIN_2 -> BUSOUT_2", InterruptInTest<PIN_BUSOUT_2,PIN_BUSIN_2>,greentea_failure_handler),
-		Case("Interrupt from BUSOUT_1 -> BUSIN_1", InterruptInTest<PIN_BUSIN_1,PIN_BUSOUT_1>,greentea_failure_handler),
-		Case("Interrupt from BUSIN_1 -> BUSOUT_1", InterruptInTest<PIN_BUSOUT_1,PIN_BUSIN_1>,greentea_failure_handler),
-		Case("Interrupt from BUSOUT_0 -> BUSIN_0", InterruptInTest<PIN_BUSIN_0,PIN_BUSOUT_0>,greentea_failure_handler),
-		Case("Interrupt from BUSIN_0 -> BUSOUT_0", InterruptInTest<PIN_BUSOUT_0,PIN_BUSIN_0>,greentea_failure_handler),
+		Case("Interrupt from GPOUT_2 -> GPIN_2", InterruptInTest<PIN_GPIN_2,PIN_GPOUT_2>,greentea_failure_handler),
+		Case("Interrupt from GPIN_2 -> GPOUT_2", InterruptInTest<PIN_GPOUT_2,PIN_GPIN_2>,greentea_failure_handler),
+		Case("Interrupt from GPOUT_1 -> GPIN_1", InterruptInTest<PIN_GPIN_1,PIN_GPOUT_1>,greentea_failure_handler),
+		Case("Interrupt from GPIN_1 -> GPOUT_1", InterruptInTest<PIN_GPOUT_1,PIN_GPIN_1>,greentea_failure_handler),
+		Case("Interrupt from GPOUT_0 -> GPIN_0", InterruptInTest<PIN_GPIN_0,PIN_GPOUT_0>,greentea_failure_handler),
+		Case("Interrupt from GPIN_0 -> GPOUT_0", InterruptInTest<PIN_GPOUT_0,PIN_GPIN_0>,greentea_failure_handler),
 };
 
 Specification specification(test_setup, cases);

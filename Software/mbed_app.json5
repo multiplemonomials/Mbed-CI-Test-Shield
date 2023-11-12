@@ -10,14 +10,19 @@
             "macro_name": "PIN_I2C_SDA",
             "value": "ARDUINO_UNO_D14"
         },
-        "PIN_I2C_EN": {
-            "help": "Pin connected to I2C_EN on the test shield.",
-            "macro_name": "PIN_I2C_EN",
+        "PIN_FUNC_SEL0": {
+            "help": "Pin connected to FUNC_SEL0 on the test shield.",
+            "macro_name": "PIN_FUNC_SEL0",
+            "value": "ARDUINO_UNO_A3"
+        },
+        "PIN_FUNC_SEL1": {
+            "help": "Pin connected to FUNC_SEL1 on the test shield.",
+            "macro_name": "PIN_FUNC_SEL1",
             "value": "ARDUINO_UNO_A4"
         },
-        "PIN_I2C_EN_FMP": {
-            "help": "Pin connected to I2C_EN_FMP on the test shield.",
-            "macro_name": "PIN_I2C_EN_FMP",
+        "PIN_FUNC_SEL2": {
+            "help": "Pin connected to FUNC_SEL2 on the test shield.",
+            "macro_name": "PIN_FUNC_SEL2",
             "value": "ARDUINO_UNO_A5"
         },
         "PIN_SPI_SCLK": {
@@ -35,62 +40,55 @@
             "macro_name": "PIN_SPI_MOSI",
             "value": "ARDUINO_UNO_D11"
         },
-        "PIN_SPI_CS": {
-            "help": "Pin connected to SPI_CS on the test shield.",
-            "macro_name": "PIN_SPI_CS",
+        "PIN_SPI_HW_CS": {
+            "help": "Pin connected to SPI_HW_CS on the test shield.  Should be a hardware CS pin.",
+            "macro_name": "PIN_SPI_HW_CS",
             "value": "ARDUINO_UNO_D10"
+        },
+        "PIN_SPI_SD_CS": {
+            "help": "Pin connected to SPI_SD_CS on the test shield.  Can be any GPIO.",
+            "macro_name": "PIN_SPI_SD_CS",
+            "value": "ARDUINO_UNO_D8"
         },
         "PIN_PWM_OUT": {
             "help": "Pin connected to PWM_OUT on the test shield.",
             "macro_name": "PIN_PWM_OUT",
-            "value": "ARDUINO_UNO_D9"
-        },
-        "PIN_DAC_OUT": {
-            "help": "Pin connected to DAC_OUT on the test shield.",
-            "macro_name": "PIN_DAC_OUT",
-            "value": "ARDUINO_UNO_D8"
+            "value": "ARDUINO_UNO_D5"
         },
         "PIN_ANALOG_IN": {
             "help": "Pin connected to ANALOG_IN on the test shield.",
             "macro_name": "PIN_ANALOG_IN",
             "value": "ARDUINO_UNO_A0"
         },
-        "PIN_BUSIN_2": {
-            "help": "Pin connected to BUSIN_2 on the test shield.",
-            "macro_name": "PIN_BUSIN_2",
+        "PIN_GPIN_2": {
+            "help": "Pin connected to GPIN_2 on the test shield.",
+            "macro_name": "PIN_GPIN_2",
             "value": "ARDUINO_UNO_D7"
         },
-        "PIN_BUSOUT_2": {
-            "help": "Pin connected to BUSOUT_2 on the test shield.",
-            "macro_name": "PIN_BUSOUT_2",
+        "PIN_GPOUT_2": {
+            "help": "Pin connected to GPOUT_2 on the test shield.",
+            "macro_name": "PIN_GPOUT_2",
             "value": "ARDUINO_UNO_D6"
         },
-        "PIN_BUSIN_1": {
-            "help": "Pin connected to BUSIN_1 on the test shield.",
-            "macro_name": "PIN_BUSIN_1",
+        "PIN_GPIN_1": {
+            "help": "Pin connected to GPIN_1 on the test shield.",
+            "macro_name": "PIN_GPIN_1",
             "value": "ARDUINO_UNO_D5"
         },
-        "PIN_BUSOUT_1": {
-            "help": "Pin connected to BUSOUT_1 on the test shield.",
-            "macro_name": "PIN_BUSOUT_1",
+        "PIN_GPOUT_1": {
+            "help": "Pin connected to GPOUT_1 on the test shield.",
+            "macro_name": "PIN_GPOUT_1",
             "value": "ARDUINO_UNO_D4"
         },
-        "PIN_BUSIN_0": {
-            "help": "Pin connected to BUSIN_0 on the test shield.",
-            "macro_name": "PIN_BUSIN_0",
+        "PIN_GPIN_0": {
+            "help": "Pin connected to GPIN_0 on the test shield.",
+            "macro_name": "PIN_GPIN_0",
             "value": "ARDUINO_UNO_D3"
         },
-        "PIN_BUSOUT_0": {
-            "help": "Pin connected to BUSOUT_0 on the test shield.",
-            "macro_name": "PIN_BUSOUT_0",
+        "PIN_GPOUT_0": {
+            "help": "Pin connected to GPOUT_0 on the test shield.",
+            "macro_name": "PIN_GPOUT_0",
             "value": "ARDUINO_UNO_D2"
-        },
-
-        "TESTSHIELD_ENABLE_HW_SPI_CS": {
-            "help": "Set to 1 if PIN_SPI_CS is connected to a pin with hardware SPI support",
-            "macro_name": "TESTSHIELD_ENABLE_HW_SPI_CS",
-            "accepted_values": ["0", "1"],
-            "value": "1"
         },
         "TESTSHIELD_DEBUG_MESSAGES": {
             "help": "Set to 1 to enable debug messages from the test shield tests",
@@ -113,16 +111,8 @@
             "sd.SPI_MISO": "D12",
             "sd.SPI_CLK": "D13"
         },
-        "NUCLEO_F429ZI": {
-            "app.TESTSHIELD_ENABLE_HW_SPI_CS": 0
-        },
-        "NUCLEO_L45RE_P": {
-            "app.TESTSHIELD_ENABLE_HW_SPI_CS": 0
-        },
-        "NUCLEO_H743ZI2": {
-            "app.TESTSHIELD_ENABLE_HW_SPI_CS": 0
-        },
         "STM32L452xE": {
+            // This was added because
             "target.clock_source": "USE_PLL_HSI"
         }
     }
