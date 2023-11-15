@@ -17,11 +17,30 @@
 #define CI_TEST_CONFIG_H
 
 #include "utest_print.h"
+#include "greentea-client/test_env.h"
 
 #if defined(TESTSHIELD_DEBUG_MESSAGES) && (TESTSHIELD_DEBUG_MESSAGES != 0)
 #define DEBUG_PRINTF(...) do { utest_printf(__VA_ARGS__); } while(0)
 #else
 #define DEBUG_PRINTF(...) {}
 #endif
+
+/*
+ * Wait for the next host message with the given key, and then assert that its
+ * value is expectedVal.
+ */
+inline void assert_next_message_from_host(char const * key, char const * expectedVal) {
+
+    // Based on the example code: https://os.mbed.com/docs/mbed-os/v6.16/debug-test/greentea-for-testing-applications.html
+    char receivedKey[64], receivedValue[64];
+    while (1) {
+        greentea_parse_kv(receivedKey, receivedValue, sizeof(receivedKey), sizeof(receivedValue));
+
+        if(strncmp(key, receivedKey, sizeof(receivedKey) - 1) == 0) {
+            TEST_ASSERT_EQUAL_STRING_LEN(expectedVal, receivedValue, sizeof(receivedKey) - 1);
+            break;
+        }
+    }
+}
 
 #endif

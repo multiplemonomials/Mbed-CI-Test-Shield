@@ -38,6 +38,7 @@ mbed_greentea_add_test(
 mbed_greentea_add_test(
     TEST_NAME testshield-i2c-basic
     TEST_SOURCES I2CBasicTest.cpp
+	HOST_TESTS_DIR host_tests
 )
 
 mbed_greentea_add_test(

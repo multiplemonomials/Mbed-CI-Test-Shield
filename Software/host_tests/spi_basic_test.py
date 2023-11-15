@@ -6,13 +6,6 @@ import binascii
 import sys
 import os
 
-# Import pyBusPirateLite from the local repo.  This requires messing a bit with sys.path.
-# Unfortunately there's no easy way to make the test runner add a directory to its module path...
-this_script_dir = os.path.dirname(__file__)
-sys.path.append(os.path.join(this_script_dir, "..", "pyBusPirateLite"))
-
-import pyBusPirateLite
-
 
 class SpiBasicTestHostTest(BaseHostTest):
 

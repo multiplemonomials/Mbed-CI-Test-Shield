@@ -35,21 +35,45 @@ using namespace utest::v1;
 // transactions, this will be visible in the test.
 I2C * i2c;
 
+/*
+ * Uses the host test to start I2C logging from the device
+ */
+void host_start_i2c_logging()
+{
+    // Note: Value is not important but cannot be empty
+    greentea_send_kv("start_recording_i2c", "please");
+    assert_next_message_from_host("start_recording_i2c", "complete");
+}
+
+/*
+ * Check that the host test saw the specified sequence on the wire
+ */
+void host_verify_sequence(char const * sequenceName)
+{
+    greentea_send_kv("verify_sequence", sequenceName);
+    assert_next_message_from_host("verify_sequence", "complete");
+}
+
 // Test that we can address the EEPROM with its correct address
 void test_correct_addr_single_byte()
 {
+    host_start_i2c_logging();
+
 	i2c->start();
 	TEST_ASSERT_EQUAL(I2C::Result::ACK, i2c->write_byte(EEPROM_I2C_ADDRESS));
 	i2c->stop();
+
+    host_verify_sequence("correct_addr_only");
 }
 void test_correct_addr_transaction()
 {
+    host_start_i2c_logging();
 	TEST_ASSERT_EQUAL(I2C::Result::ACK, i2c->write(EEPROM_I2C_ADDRESS, nullptr, 0, false));
+    host_verify_sequence("correct_addr_only");
 }
 void test_correct_addr_read_transaction()
 {
-    uint8_t readByte = 0;
-	TEST_ASSERT_EQUAL(I2C::Result::ACK, i2c->read(EEPROM_I2C_ADDRESS | 1, reinterpret_cast<char *>(&readByte), 1));
+	TEST_ASSERT_EQUAL(I2C::Result::ACK, i2c->read(EEPROM_I2C_ADDRESS | 1, nullptr, 0));
 }
 
 // Test that we receive a NACK when trying to use an address that doesn't exist
@@ -89,6 +113,8 @@ void test_incorrect_addr_async()
 // but using a different API.
 void test_simple_write_single_byte()
 {
+    host_start_i2c_logging();
+
     // Write 0x2 to address 1
     i2c->start();
     TEST_ASSERT_EQUAL(I2C::Result::ACK, i2c->write_byte(EEPROM_I2C_ADDRESS));
@@ -99,6 +125,8 @@ void test_simple_write_single_byte()
 
     // Maximum program time before the EEPROM responds again
     ThisThread::sleep_for(5ms);
+
+    host_verify_sequence("write_2_to_0x1");
 }
 
 void test_simple_read_single_byte()
@@ -300,8 +328,12 @@ utest::v1::status_t test_setup(const size_t number_of_cases)
 	i2c = new I2C(PIN_I2C_SDA, PIN_I2C_SCL);
 	i2c->frequency(100000); // Use a lower frequency so that a logic analyzer can more easily capture what's up
 
+    // Initialize logic analyzer for I2C pinouts
+    static BusOut funcSelPins(PIN_FUNC_SEL0, PIN_FUNC_SEL1, PIN_FUNC_SEL2);
+    funcSelPins = 0b001;
+
 	// Setup Greentea using a reasonable timeout in seconds
-	GREENTEA_SETUP(20, "default_auto");
+	GREENTEA_SETUP(20, "i2c_basic_test");
 	return verbose_test_setup_handler(number_of_cases);
 }
 
