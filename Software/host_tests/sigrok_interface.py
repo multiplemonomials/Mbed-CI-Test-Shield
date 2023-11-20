@@ -16,7 +16,13 @@ if "MBED_SIGROK_COMMAND" not in os.environ:
 SIGROK_COMMON_COMMAND = [*shlex.split(os.environ["MBED_SIGROK_COMMAND"]),
                          "--driver", "fx2lafw",  # Set driver to FX2LAFW
                          "--config",
-                         "samplerate=4 MHz" # 4 MHz seems to be the best I can get on my PCB before running into a "device only sent x samples" error
+                         # 4 MHz seems to be the best I can get on my PCB before running into a "device only sent x samples" error
+                         # Additionally, for decoding messages right at the trigger, we need to change the "capture ratio"
+                         # option so that just a few samples are kept from before the trigger.
+                         # Details here: https://sigrok.org/bugzilla/show_bug.cgi?id=1657
+                         # The hard part was figuring out how to change the capture ratio as there is zero documentation.
+                         # It appears that it's a percentage from 0 to 100.
+                         "samplerate=4 MHz:captureratio=5"
                          ]
 
 # i2c sigrok command
@@ -25,8 +31,10 @@ SIGROK_I2C_COMMAND = [*SIGROK_COMMON_COMMAND,
                       "i2c:scl=D0:sda=D1:address_format=unshifted",  # Set up I2C decoder
                       "--protocol-decoder-annotations",
                       "i2c=address-read:address-write:data-read:data-write:start:repeat-start:ack:nack:stop",  # Request output of all detectable conditions
-                      #"--triggers",
-                      #"D0=0",
+
+                      # Trigger on falling edge of SCL
+                      "--triggers",
+                      "D0=f",
                       ]
 
 
@@ -168,7 +176,7 @@ class SigrokI2CRecorder():
         command = [*SIGROK_I2C_COMMAND, "--time", str(round(record_time * 1000))]
         #print("Executing: " + " ".join(command))
         self._sigrok_process = subprocess.Popen(command, text=True, stdout = subprocess.PIPE)
-        time.sleep(.25)
+        time.sleep(0.5)
 
     def get_result(self) -> List[I2CBusData]:
         """
@@ -176,7 +184,7 @@ class SigrokI2CRecorder():
         :return: Data recorded (list of I2CBusData subclasses)
         """
 
-        self._sigrok_process.wait(10)
+        self._sigrok_process.wait(5)
 
         if self._sigrok_process.returncode != 0:
             raise RuntimeError("Sigrok failed!")
@@ -204,7 +212,7 @@ class SigrokI2CRecorder():
                 i2c_transaction.append(I2CNack())
             elif SR_I2C_STOP.match(line):
                 i2c_transaction.append(I2CStop())
-            elif (line == "i2c-1: Read" or line == "i2c-1: Write" or len(line) == 0):
+            elif line == "i2c-1: Read" or line == "i2c-1: Write" or len(line) == 0:
                 # we can ignore these ones
                 pass
             else:

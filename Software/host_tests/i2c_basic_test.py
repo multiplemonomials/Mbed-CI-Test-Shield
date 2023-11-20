@@ -10,7 +10,7 @@ import os
 this_script_dir = os.path.dirname(__file__)
 sys.path.append(this_script_dir)
 
-from sigrok_interface import I2CStart, I2CRepeatedStart, I2CWriteToAddr, I2CReadFromAddr, I2CDataByte, I2CAck, I2CStop, SigrokI2CRecorder
+from sigrok_interface import I2CStart, I2CRepeatedStart, I2CWriteToAddr, I2CReadFromAddr, I2CDataByte, I2CAck, I2CNack, I2CStop, SigrokI2CRecorder
 
 
 class I2CBasicTestHostTest(BaseHostTest):
@@ -28,6 +28,12 @@ class I2CBasicTestHostTest(BaseHostTest):
         # Write to EEPROM address, then stop
         "correct_addr_only": [I2CStart(), I2CWriteToAddr(0xA0), I2CAck(), I2CStop()],
 
+        # Write to incorrect EEPROM address, then stop
+        "incorrect_addr_only_write": [I2CStart(), I2CWriteToAddr(0x20), I2CNack(), I2CStop()],
+
+        # Read from incorrect EEPROM address, then stop
+        "incorrect_addr_only_read": [I2CStart(), I2CReadFromAddr(0x21), I2CNack(), I2CStop()],
+
         "write_2_to_0x1": [I2CStart(), I2CWriteToAddr(0xA0), I2CAck(), I2CDataByte(0x0), I2CAck(), I2CDataByte(0x1), I2CAck(), I2CDataByte(0x2), I2CAck(), I2CStop()]
     }
 
@@ -42,7 +48,7 @@ class I2CBasicTestHostTest(BaseHostTest):
         Called at the start of every test case.  Should start a recording of I2C data.
         """
 
-        self.recorder.record(1)
+        self.recorder.record(0.05) # Everything we do in this test should complete in under 0.05s
 
         self.send_kv('start_recording_i2c', 'complete')
 
@@ -52,7 +58,10 @@ class I2CBasicTestHostTest(BaseHostTest):
         """
 
         recorded_data = self.recorder.get_result()
-        self.logger.prn_inf("Saw on the I2C bus: " + " ".join(str(item) for item in recorded_data))
+        if len(recorded_data) > 0:
+            self.logger.prn_inf("Saw on the I2C bus: " + " ".join(str(item) for item in recorded_data))
+        else:
+            self.logger.prn_inf("Saw nothing the I2C bus.")
 
         fail = False
         if len(self.SEQUENCES[value]) != len(recorded_data):
@@ -68,7 +77,7 @@ class I2CBasicTestHostTest(BaseHostTest):
             self.logger.prn_inf("PASS")
             self.send_kv('verify_sequence', 'complete')
         else:
-            self.logger.prn_inf("But! We expected: " + " ".join(str(item) for item in self.SEQUENCES[value]))
+            self.logger.prn_inf("We expected: " + " ".join(str(item) for item in self.SEQUENCES[value]))
             self.logger.prn_inf("FAIL")
             self.send_kv('verify_sequence', 'failed')
 

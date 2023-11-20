@@ -79,33 +79,45 @@ void test_correct_addr_read_transaction()
 // Test that we receive a NACK when trying to use an address that doesn't exist
 void test_incorrect_addr_single_byte()
 {
+    host_start_i2c_logging();
+
 	i2c->start();
 	TEST_ASSERT_EQUAL(I2C::Result::NACK, i2c->write_byte(0x20));
 	i2c->stop();
+
+    host_verify_sequence("incorrect_addr_only_write");
 }
 void test_incorrect_addr_zero_len_transaction() // Special test for 0-length transactions because some HALs special case this
 {
+    host_start_i2c_logging();
 	TEST_ASSERT_EQUAL(I2C::Result::NACK, i2c->write(0x20, nullptr, 0, false));
+    host_verify_sequence("incorrect_addr_only_write");
 }
 void test_incorrect_addr_write_transaction()
 {
-    uint8_t const data[2] = {0x01, 0x03}; // Writes 0x3 to address 1
-	TEST_ASSERT_EQUAL(I2C::Result::NACK, i2c->write(0x20, reinterpret_cast<const char *>(data), 2, false));
+    host_start_i2c_logging();
+    uint8_t const data[3] = {0x0, 0x01, 0x03}; // Writes 0x3 to address 1
+	TEST_ASSERT_EQUAL(I2C::Result::NACK, i2c->write(0x20, reinterpret_cast<const char *>(data), sizeof(data), false));
+    host_verify_sequence("incorrect_addr_only_write");
 }
 void test_incorrect_addr_read_transaction()
 {
+    host_start_i2c_logging();
     uint8_t readByte = 0;
 	TEST_ASSERT_EQUAL(I2C::Result::NACK, i2c->read(0x20 | 1, reinterpret_cast<char *>(&readByte), 1));
+    host_verify_sequence("incorrect_addr_only_read");
 }
 
 #if DEVICE_I2C_ASYNCH
 void test_incorrect_addr_async()
 {
-    uint8_t const data[2] = {0x01, 0x04}; // Writes 0x4 to address 1
+    host_start_i2c_logging();
+    uint8_t const data[3] = {0x0, 0x01, 0x03}; // Writes 0x3 to address 1
     TEST_ASSERT_EQUAL(I2C::Result::NACK, i2c->transfer_and_wait(0x20,
-                                                               reinterpret_cast<const char *>(data), 2,
+                                                               reinterpret_cast<const char *>(data), sizeof(data),
                                                                nullptr, 0,
                                                                1s));
+    host_verify_sequence("incorrect_addr_only_write");
 }
 #endif
 

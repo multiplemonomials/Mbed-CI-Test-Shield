@@ -54,10 +54,6 @@ char read_string[MAX_TEST_SIZE];
 template<uint32_t busSpeed, int size_of_data, int address>
 void flash_WR()
 {
-    // Enable I2C signals to logic analyzer
-    DigitalOut i2cEn(PIN_I2C_EN, 1);
-    DigitalOut i2cEnFastMode(PIN_I2C_EN_FMP, busSpeed > 400000);
-
 	I2CEEBlockDevice memory(PIN_I2C_SDA, PIN_I2C_SCL, EEPROM_I2C_ADDRESS, EEPROM_SIZE, EEPROM_BLOCK_SIZE, busSpeed,
 	                        EEPROM_ADDRESS_8_BIT);
 
@@ -95,10 +91,6 @@ void flash_WR()
 template<uint32_t busSpeed, int address>
 void single_byte_WR()
 {
-    // Enable I2C signals to logic analyzer
-    DigitalOut i2cEn(PIN_I2C_EN, 1);
-    DigitalOut i2cEnFastMode(PIN_I2C_EN_FMP, busSpeed > 400000);
-
 	I2CEEBlockDevice memory(PIN_I2C_SDA, PIN_I2C_SCL, EEPROM_I2C_ADDRESS, EEPROM_SIZE, EEPROM_BLOCK_SIZE, busSpeed, EEPROM_ADDRESS_8_BIT);
 	char test = 'A' + rand()%26;
 	char read;
@@ -123,6 +115,10 @@ void test_object()
 
 utest::v1::status_t test_setup(const size_t number_of_cases)
 {
+    // Initialize logic analyzer for I2C pinouts
+    static BusOut funcSelPins(PIN_FUNC_SEL0, PIN_FUNC_SEL1, PIN_FUNC_SEL2);
+    funcSelPins = 0b001;
+
 	// Setup Greentea using a reasonable timeout in seconds
 	GREENTEA_SETUP(20, "default_auto");
 	return verbose_test_setup_handler(number_of_cases);
