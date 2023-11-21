@@ -5,10 +5,11 @@ import traceback
 import binascii
 import sys
 import os
+import pathlib
 
 # Unfortunately there's no easy way to make the test runner add a directory to its module path...
-this_script_dir = os.path.dirname(__file__)
-sys.path.append(this_script_dir)
+this_script_dir = pathlib.Path(os.path.dirname(__file__))
+sys.path.append(str(this_script_dir / ".." / "host_test_utils"))
 
 from sigrok_interface import I2CStart, I2CRepeatedStart, I2CWriteToAddr, I2CReadFromAddr, I2CDataByte, I2CAck, I2CNack, I2CStop, SigrokI2CRecorder
 
@@ -34,7 +35,19 @@ class I2CBasicTestHostTest(BaseHostTest):
         # Read from incorrect EEPROM address, then stop
         "incorrect_addr_only_read": [I2CStart(), I2CReadFromAddr(0x21), I2CNack(), I2CStop()],
 
-        "write_2_to_0x1": [I2CStart(), I2CWriteToAddr(0xA0), I2CAck(), I2CDataByte(0x0), I2CAck(), I2CDataByte(0x1), I2CAck(), I2CDataByte(0x2), I2CAck(), I2CStop()]
+        # Write the byte 2 to address 0x1
+        "write_2_to_0x1": [I2CStart(), I2CWriteToAddr(0xA0), I2CAck(), I2CDataByte(0x0), I2CAck(), I2CDataByte(0x1), I2CAck(), I2CDataByte(0x2), I2CAck(), I2CStop()],
+
+        # Write the byte 3 to address 0x1
+        "write_3_to_0x1": [I2CStart(), I2CWriteToAddr(0xA0), I2CAck(), I2CDataByte(0x0), I2CAck(), I2CDataByte(0x1), I2CAck(), I2CDataByte(0x3), I2CAck(), I2CStop()],
+
+        # Read the byte 2 from address 0x1
+        "read_2_from_0x1": [I2CStart(), I2CWriteToAddr(0xA0), I2CAck(), I2CDataByte(0x0), I2CAck(), I2CDataByte(0x1), I2CAck(),
+                           I2CRepeatedStart(), I2CReadFromAddr(0xA1), I2CAck(), I2CDataByte(0x2), I2CNack(), I2CStop()],
+
+        # Read the byte 3 from address 0x1
+        "read_3_from_0x1": [I2CStart(), I2CWriteToAddr(0xA0), I2CAck(), I2CDataByte(0x0), I2CAck(), I2CDataByte(0x1), I2CAck(),
+                            I2CRepeatedStart(), I2CReadFromAddr(0xA1), I2CAck(), I2CDataByte(0x3), I2CNack(), I2CStop()],
     }
 
     def __init__(self):

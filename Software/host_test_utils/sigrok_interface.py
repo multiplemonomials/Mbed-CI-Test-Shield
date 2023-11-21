@@ -2,6 +2,10 @@
 ## Sigrok-based logic analyzer.
 ## Handles running the Sigrok command and parsing the results.
 
+# Note: This module file cannot be in the host_tests directory, because the test runner iterates through
+# and imports all the modules in that directory.  So, if it's in there, it gets imported twice, and really
+# bad stuff happens.
+
 import re
 import os
 import shlex
@@ -63,7 +67,7 @@ class I2CRepeatedStart(I2CBusData):
     """
 
     def __str__(self):
-        return "StartRepeated"
+        return "RepeatedStart"
 
     def __eq__(self, other):
         return isinstance(other, I2CRepeatedStart)
@@ -156,8 +160,8 @@ class I2CStop(I2CBusData):
 
 
 # Regexes for parsing the sigrok I2C output
-SR_I2C_START = re.compile(r'i2c-1: Start')
 SR_I2C_REPEATED_START = re.compile(r'i2c-1: Start repeat')
+SR_I2C_START = re.compile(r'i2c-1: Start')
 SR_I2C_WRITE_TO_ADDR = re.compile(r'i2c-1: Address write: (..)')
 SR_I2C_READ_FROM_ADDR = re.compile(r'i2c-1: Address read: (..)')
 SR_I2C_DATA_BYTE = re.compile(r'i2c-1: Data [^ ]+: (..)') # matches "Data read" or "Data write"
@@ -193,10 +197,12 @@ class SigrokI2CRecorder():
 
         # Parse output
         for line in self._sigrok_process.communicate()[0].split("\n"):
-            if SR_I2C_START.match(line):
-                i2c_transaction.append(I2CStart())
-            elif SR_I2C_REPEATED_START.match(line):
+            # Note: Must check repeated start first because repeated start is a substring of start,
+            # so the start regex will match it as well.
+            if SR_I2C_REPEATED_START.match(line):
                 i2c_transaction.append(I2CRepeatedStart())
+            elif SR_I2C_START.match(line):
+                i2c_transaction.append(I2CStart())
             elif SR_I2C_WRITE_TO_ADDR.match(line):
                 write_address = int(SR_I2C_WRITE_TO_ADDR.match(line).group(1), 16)
                 i2c_transaction.append(I2CWriteToAddr(write_address))
