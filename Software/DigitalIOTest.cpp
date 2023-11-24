@@ -22,24 +22,49 @@
 
 using namespace utest::v1;
 
-// Template to test paired Digital IO pins, meant to be re-used multiple times
+// How long to wait after changing the output pin for the signal to propagate to the input pin
+constexpr int PROPAGATION_TIME = 100; // us
+
+DigitalIn GPIN_0(PIN_GPIN_0);
+DigitalIn GPIN_1(PIN_GPIN_1);
+
+// We have one digital out with each initial state, 1 and 0.  This checks
+// that the global constructor initialized the pin properly.
+DigitalOut GPOUT_0(PIN_GPOUT_0, 0);
+DigitalOut GPOUT_1(PIN_GPOUT_1, 1);
+
+// Test of globally allocated DigitalOuts and DigitalIns
+template <DigitalOut & dout, DigitalIn & din, int pin_initial_state>
+void DigitalIO_Global_Test()
+{
+    TEST_ASSERT_MESSAGE(din.read() == pin_initial_state, "Initial state of input pin doesn't match bootup value of output pin.");
+    TEST_ASSERT_MESSAGE(dout.read() == pin_initial_state, "Initial state of output pin doesn't match bootup value of output pin.");
+
+    dout = !pin_initial_state;
+    wait_us(PROPAGATION_TIME);
+
+    TEST_ASSERT_MESSAGE(dout.read() == !pin_initial_state, "Toggled state of output pin doesn't match toggled value of output pin.");
+    TEST_ASSERT_MESSAGE(din.read() == !pin_initial_state, "Toggled state of input pin doesn't match toggled value of output pin.");
+}
+
+// Test of stack-allocated DigitalOuts and DigitalIns
 template <PinName dout_pin, PinName din_pin>
-void DigitalIO_Test()
+void DigitalIO_StackAllocated_Test()
 {
     DigitalOut dout(dout_pin);
     DigitalIn din(din_pin);
     // test 0
     dout = 0;
-    wait_ns(100);
+    wait_us(PROPAGATION_TIME);
     TEST_ASSERT_MESSAGE(0 == din.read(),"Expected value to be 0, read value was not zero");
     // test 1
     dout = 1;
-    wait_ns(100);
+    wait_us(PROPAGATION_TIME);
     TEST_ASSERT_MESSAGE(1 == din.read(),"Expected value to be 1, read value was not one");
     // test 2
     // Test = operator in addition to the .read() function
     dout = 0;
-    wait_ns(100);
+    wait_us(PROPAGATION_TIME);
     TEST_ASSERT_MESSAGE(0 == din,"Expected value to be 0, read value was not zero");
 }
 
@@ -51,12 +76,10 @@ utest::v1::status_t test_setup(const size_t number_of_cases) {
 
 // Test cases
 Case cases[] = {
-    Case("Digital I/O GPIN_0 -> GPOUT_0", DigitalIO_Test<PIN_GPOUT_0, PIN_GPIN_0>),
-    Case("Digital I/O GPOUT_0 -> GPIN_0", DigitalIO_Test<PIN_GPIN_0, PIN_GPOUT_0>),
-    Case("Digital I/O GPIN_1 -> GPOUT_1", DigitalIO_Test<PIN_GPOUT_1, PIN_GPIN_1>),
-    Case("Digital I/O GPOUT_1 -> GPIN_1", DigitalIO_Test<PIN_GPIN_1, PIN_GPOUT_1>),
-    Case("Digital I/O GPIN_2 -> GPOUT_2", DigitalIO_Test<PIN_GPOUT_2, PIN_GPIN_2>),
-    Case("Digital I/O GPOUT_2 -> GPIN_2", DigitalIO_Test<PIN_GPIN_2, PIN_GPOUT_2>),
+    Case("Digital I/O GPOUT_0 -> GPIN_0", DigitalIO_Global_Test<GPOUT_0, GPIN_0, 0>),
+    Case("Digital I/O GPOUT_1 -> GPIN_1", DigitalIO_Global_Test<GPOUT_1, GPIN_1, 1>),
+    Case("Digital I/O GPIN_2 -> GPOUT_2", DigitalIO_StackAllocated_Test<PIN_GPOUT_2, PIN_GPIN_2>),
+    Case("Digital I/O GPOUT_2 -> GPIN_2", DigitalIO_StackAllocated_Test<PIN_GPIN_2, PIN_GPOUT_2>),
 };
 
 Specification specification(test_setup, cases, greentea_continue_handlers);

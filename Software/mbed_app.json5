@@ -73,22 +73,22 @@
         "PIN_GPIN_1": {
             "help": "Pin connected to GPIN_1 on the test shield.",
             "macro_name": "PIN_GPIN_1",
-            "value": "ARDUINO_UNO_D5"
+            "value": "ARDUINO_UNO_D4"
         },
         "PIN_GPOUT_1": {
             "help": "Pin connected to GPOUT_1 on the test shield.",
             "macro_name": "PIN_GPOUT_1",
-            "value": "ARDUINO_UNO_D4"
+            "value": "ARDUINO_UNO_D5"
         },
         "PIN_GPIN_0": {
             "help": "Pin connected to GPIN_0 on the test shield.",
             "macro_name": "PIN_GPIN_0",
-            "value": "ARDUINO_UNO_D3"
+            "value": "ARDUINO_UNO_D2"
         },
         "PIN_GPOUT_0": {
             "help": "Pin connected to GPOUT_0 on the test shield.",
             "macro_name": "PIN_GPOUT_0",
-            "value": "ARDUINO_UNO_D2"
+            "value": "ARDUINO_UNO_D3"
         },
         "TESTSHIELD_DEBUG_MESSAGES": {
             "help": "Set to 1 to enable debug messages from the test shield tests",
