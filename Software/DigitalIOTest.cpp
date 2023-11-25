@@ -19,11 +19,9 @@
 #include "unity.h"
 #include "utest.h"
 
+#include "ci_test_common.h"
 
 using namespace utest::v1;
-
-// How long to wait after changing the output pin for the signal to propagate to the input pin
-constexpr int PROPAGATION_TIME = 100; // us
 
 DigitalIn GPIN_0(PIN_GPIN_0);
 DigitalIn GPIN_1(PIN_GPIN_1);
@@ -41,7 +39,7 @@ void DigitalIO_Global_Test()
     TEST_ASSERT_MESSAGE(dout.read() == pin_initial_state, "Initial state of output pin doesn't match bootup value of output pin.");
 
     dout = !pin_initial_state;
-    wait_us(PROPAGATION_TIME);
+    wait_us(GPIO_PROPAGATION_TIME);
 
     TEST_ASSERT_MESSAGE(dout.read() == !pin_initial_state, "Toggled state of output pin doesn't match toggled value of output pin.");
     TEST_ASSERT_MESSAGE(din.read() == !pin_initial_state, "Toggled state of input pin doesn't match toggled value of output pin.");
@@ -55,16 +53,16 @@ void DigitalIO_StackAllocated_Test()
     DigitalIn din(din_pin);
     // test 0
     dout = 0;
-    wait_us(PROPAGATION_TIME);
+    wait_us(GPIO_PROPAGATION_TIME);
     TEST_ASSERT_MESSAGE(0 == din.read(),"Expected value to be 0, read value was not zero");
     // test 1
     dout = 1;
-    wait_us(PROPAGATION_TIME);
+    wait_us(GPIO_PROPAGATION_TIME);
     TEST_ASSERT_MESSAGE(1 == din.read(),"Expected value to be 1, read value was not one");
     // test 2
     // Test = operator in addition to the .read() function
     dout = 0;
-    wait_us(PROPAGATION_TIME);
+    wait_us(GPIO_PROPAGATION_TIME);
     TEST_ASSERT_MESSAGE(0 == din,"Expected value to be 0, read value was not zero");
 }
 

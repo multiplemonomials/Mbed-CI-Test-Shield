@@ -22,7 +22,7 @@
 #include "greentea-client/test_env.h"
 #include "unity.h"
 #include "utest.h"
-#include "ci_test_config.h"
+#include "ci_test_common.h"
 //#include "rtos.h"
 
 using namespace utest::v1;
@@ -49,7 +49,7 @@ void InterruptInTest()
 	result = false;
 	intin.rise(cbfn);
 	dout = 1;
-	thread_sleep_for(0); // dummy wait to get volatile result value
+	wait_us(GPIO_PROPAGATION_TIME);
 	DEBUG_PRINTF("Value of result is : %d\n",result);
 	TEST_ASSERT_MESSAGE(result,"cbfn was not triggered on rising edge of pin");
 
@@ -67,7 +67,7 @@ void InterruptInTest()
 	result = false;
 	intin.fall(cbfn);
 	dout = 0;
-	thread_sleep_for(0); // dummy wait to get volatile result value
+    wait_us(GPIO_PROPAGATION_TIME);
 	DEBUG_PRINTF("Value of result is : %d\n",result);
 	TEST_ASSERT_MESSAGE(result,"cbfn was not triggered on falling edge of pin");
 

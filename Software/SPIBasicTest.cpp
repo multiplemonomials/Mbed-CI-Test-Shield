@@ -23,7 +23,7 @@
 #include "greentea-client/test_env.h"
 #include "unity.h"
 #include "utest.h"
-#include "ci_test_config.h"
+#include "ci_test_common.h"
 #include <cinttypes>
 
 using namespace utest::v1;

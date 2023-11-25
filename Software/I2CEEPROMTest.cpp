@@ -24,7 +24,7 @@
 #include "unity.h"
 #include "utest.h"
 #include <I2CEEBlockDevice.h>
-#include "ci_test_config.h"
+#include "ci_test_common.h"
 
 using namespace utest::v1;
 
