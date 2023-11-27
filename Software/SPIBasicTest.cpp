@@ -44,6 +44,12 @@ uint16_t const standardMessageUint16s[] = {0x0102, 0x0408};
 // Should produce the same data above, but encoded as uint32s
 uint32_t const standardMessageUint32 = 0x01020408;
 
+// Default write value for the SPI bus
+uint8_t const DEFAULT_WRITE_VALUE = 0xAF;
+
+// Response from the SPI mirror resistor when writing the default write value for 4 bytes
+uint8_t const defaultWriteResponse[] = {DEFAULT_WRITE_VALUE, DEFAULT_WRITE_VALUE, DEFAULT_WRITE_VALUE, DEFAULT_WRITE_VALUE};
+
 // Get the correct message pointer from the above arrays based on the word size
 inline void const * getMessage(size_t wordSize)
 {
@@ -91,13 +97,13 @@ void host_print_spi_data()
 }
 
 /*
- * Assert that the host machine has received the "standard message" over the SPI MOSI line
+ * Assert that the host machine has seen the "standard message" over the SPI bus
  */
 void host_assert_standard_message()
 {
     // Note: Value is not important but cannot be empty
-    greentea_send_kv("verify_standard_message", "please");
-    assert_next_message_from_host("verify_standard_message", "pass");
+    greentea_send_kv("verify_sequence", "standard_word");
+    assert_next_message_from_host("verify_sequence", "complete");
 }
 
 /*
@@ -108,15 +114,14 @@ void write_single_word_uint8()
     host_start_spi_logging();
 
     spi->format(8, spiMode);
-    spi->select();
     for(uint8_t word : standardMessageBytes)
     {
-        spi->write(word);
+        // Thanks to the SPI mirror resistor, when nothing is using the miso line,
+        // the data on mosi will appear on miso
+        TEST_ASSERT_EQUAL_UINT8(word, spi->write(word));
     }
-    spi->deselect();
 
     host_assert_standard_message();
-    host_print_spi_data();
 }
 
 /*
@@ -127,15 +132,14 @@ void write_single_word_uint16()
     host_start_spi_logging();
 
     spi->format(16, spiMode);
-    spi->select();
     for(uint16_t word : standardMessageUint16s)
     {
-        spi->write(word);
+        // Thanks to the SPI mirror resistor, when nothing is using the miso line,
+        // the data on mosi will appear on miso
+        TEST_ASSERT_EQUAL_UINT16(word, spi->write(word));
     }
-    spi->deselect();
 
     host_assert_standard_message();
-    host_print_spi_data();
 }
 
 /*
@@ -146,12 +150,9 @@ void write_single_word_uint32()
     host_start_spi_logging();
 
     spi->format(32, spiMode);
-    spi->select();
-    spi->write(standardMessageUint32);
-    spi->deselect();
+    TEST_ASSERT_EQUAL_UINT32(standardMessageUint32, spi->write(standardMessageUint32));
 
     host_assert_standard_message();
-    host_print_spi_data();
 }
 
 /*
@@ -168,7 +169,6 @@ void write_transactional_tx_only()
                nullptr,
                0);
     host_assert_standard_message();
-    host_print_spi_data();
 }
 
 /*
@@ -180,9 +180,11 @@ void write_transactional_rx_only()
 {
     host_start_spi_logging();
     spi->format(sizeof(Word) * 8, spiMode);
+
     char rxBytes[sizeof(standardMessageBytes) / sizeof(Word)] {};
     spi->write(nullptr, 0, rxBytes, sizeof(standardMessageBytes));
-    host_print_spi_data();
+
+    TEST_ASSERT_EQUAL_HEX8_ARRAY(defaultWriteResponse, rxBytes, sizeof(defaultWriteResponse));
 }
 
 /*
@@ -200,7 +202,6 @@ void write_transactional_tx_rx()
                rxBytes,
                sizeof(standardMessageBytes));
     host_assert_standard_message();
-    host_print_spi_data();
 }
 
 /*
@@ -227,7 +228,6 @@ void use_multiple_spi_objects()
     spi->write(standardMessageBytes + 3, 1, nullptr, 0);
 
     host_assert_standard_message();
-    host_print_spi_data();
 }
 
 /*
@@ -247,7 +247,6 @@ void free_and_reallocate_spi()
     spi->write(standardMessageBytes, 4, nullptr, 0);
 
     host_assert_standard_message();
-    host_print_spi_data();
 }
 
 #if DEVICE_SPI_ASYNCH
@@ -261,7 +260,6 @@ void write_async_tx_only()
     auto ret = spi->transfer_and_wait(standardMessageBytes, sizeof(standardMessageBytes), nullptr, 0);
     TEST_ASSERT_EQUAL(ret, 0);
     host_assert_standard_message();
-    host_print_spi_data();
 }
 
 template<DMAUsage dmaUsage>
@@ -272,7 +270,12 @@ void write_async_rx_only()
     uint8_t rxBytes[sizeof(standardMessageBytes)]{};
     auto ret = spi->transfer_and_wait(nullptr, 0, rxBytes, sizeof(standardMessageBytes), 1s);
     TEST_ASSERT_EQUAL(ret, 0);
+
+    // Note: Currently Mbed does not respect the default write value for async SPI transactions.
+    // What's written when the tx buffer is technically undefined but is 0xFF on most platforms.
+    // See https://github.com/ARMmbed/mbed-os/issues/13941
     printf("Got: %hhx %hhx %hhx %hhx\n", rxBytes[0], rxBytes[1], rxBytes[2], rxBytes[3]);
+
     host_print_spi_data();
 }
 
@@ -284,9 +287,8 @@ void write_async_tx_rx()
     uint8_t rxBytes[sizeof(standardMessageBytes)]{};
     auto ret = spi->transfer_and_wait(standardMessageBytes, sizeof(standardMessageBytes), rxBytes, sizeof(standardMessageBytes), 1s);
     TEST_ASSERT_EQUAL(ret, 0);
-    printf("Got: %hhx %hhx %hhx %hhx\n", rxBytes[0], rxBytes[1], rxBytes[2], rxBytes[3]);
+    TEST_ASSERT_EQUAL_HEX8_ARRAY(standardMessageBytes, rxBytes, sizeof(standardMessageBytes));
     host_assert_standard_message();
-    host_print_spi_data();
 }
 
 /*
@@ -387,7 +389,6 @@ void async_queue_and_abort()
     TEST_ASSERT_EQUAL(callbackEvent1, 0);
     TEST_ASSERT_EQUAL(callbackEvent2, SPI_EVENT_COMPLETE);
 
-    host_print_spi_data();
     greentea_send_kv("verify_queue_and_abort_test", "please");
     assert_next_message_from_host("verify_queue_and_abort_test", "pass");
 }
@@ -419,7 +420,6 @@ void async_use_multiple_spi_objects()
     spi->transfer_and_wait(standardMessageBytes + 3, 1, nullptr, 0);
 
     host_assert_standard_message();
-    host_print_spi_data();
 }
 
 /*
@@ -440,12 +440,11 @@ void async_free_and_reallocate_spi()
     spi->transfer_and_wait(standardMessageBytes, 4, nullptr, 0);
 
     host_assert_standard_message();
-    host_print_spi_data();
 }
 
 #endif
 
-// TODO test for sync & async fill characters
+// TODO test for async fill characters
 
 utest::v1::status_t test_setup(const size_t number_of_cases)
 {
@@ -453,16 +452,18 @@ utest::v1::status_t test_setup(const size_t number_of_cases)
     // to actually respond.
     spi = new SPI(PIN_SPI_MOSI, PIN_SPI_MISO, PIN_SPI_SCLK);
     spi->frequency(spiFreq);
+    spi->set_default_write_value(DEFAULT_WRITE_VALUE);
 
     // For starters, don't use DMA, but we will use it later
     spi->set_dma_usage(DMA_USAGE_NEVER);
+
 
     // Initialize logic analyzer for SPI pinouts
     static BusOut funcSelPins(PIN_FUNC_SEL0, PIN_FUNC_SEL1, PIN_FUNC_SEL2);
     funcSelPins = 0b010;
 
     // Setup Greentea using a reasonable timeout in seconds
-    GREENTEA_SETUP(30, "default_auto"/*"spi_basic_test"*/);
+    GREENTEA_SETUP(30, "spi_basic_test");
     return verbose_test_setup_handler(number_of_cases);
 }
 

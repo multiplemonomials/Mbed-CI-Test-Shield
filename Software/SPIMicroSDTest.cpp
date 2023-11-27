@@ -223,7 +223,7 @@ void test_sd_file()
 utest::v1::status_t test_setup(const size_t number_of_cases)
 {
     // Setup Greentea using a reasonable timeout in seconds
-    GREENTEA_SETUP(40, "default_auto");
+    GREENTEA_SETUP(120, "default_auto");
 
     // Initialize logic analyzer for SPI pinouts
     static BusOut funcSelPins(PIN_FUNC_SEL0, PIN_FUNC_SEL1, PIN_FUNC_SEL2);

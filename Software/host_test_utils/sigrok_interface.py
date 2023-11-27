@@ -1,7 +1,7 @@
 ## Module to interface with the test shield's internal
 ## Sigrok-based logic analyzer.
 ## Handles running the Sigrok command and parsing the results.
-
+import binascii
 # Note: This module file cannot be in the host_tests directory, because the test runner iterates through
 # and imports all the modules in that directory.  So, if it's in there, it gets imported twice, and really
 # bad stuff happens.
@@ -11,7 +11,8 @@ import os
 import shlex
 import subprocess
 import time
-from typing import List, cast
+from typing import List, cast, Optional, Tuple
+from dataclasses import dataclass
 
 if "MBED_SIGROK_COMMAND" not in os.environ:
     raise RuntimeError("Must set the MBED_SIGROK_COMMAND environment variable to use the Sigrok logic analyzer tests.")
@@ -40,6 +41,11 @@ SIGROK_I2C_COMMAND = [*SIGROK_COMMON_COMMAND,
                       "--triggers",
                       "D0=f",
                       ]
+
+
+# How long to wait, in seconds, after starting a sigrok recording before we can start the test.
+# It would sure be nice if sigrok had some sort of "I'm ready to capture data" printout...
+SIGROK_START_DELAY = 0.5 # s
 
 
 class I2CBusData:
@@ -180,7 +186,7 @@ class SigrokI2CRecorder():
         command = [*SIGROK_I2C_COMMAND, "--time", str(round(record_time * 1000))]
         #print("Executing: " + " ".join(command))
         self._sigrok_process = subprocess.Popen(command, text=True, stdout = subprocess.PIPE)
-        time.sleep(0.5)
+        time.sleep(SIGROK_START_DELAY)
 
     def get_result(self) -> List[I2CBusData]:
         """
@@ -225,3 +231,161 @@ class SigrokI2CRecorder():
                 print(f"Warning: Unparsed Sigrok output: '{line}'")
 
         return i2c_transaction
+
+
+@dataclass
+class SPITransaction():
+    # Bytes seen on MOSI
+    mosi_bytes: bytes
+
+    # Bytes seen on MISO.  Note: Always has the same length as mosi_bytes
+    miso_bytes: bytes
+
+    def __init__(self, mosi_bytes, miso_bytes):
+        """
+        Construct an SPITransaction.  Accepts values for the mosi and miso bytes that are convertible
+        to bytes (e.g. bytes, bytearray, or an iterable of integers).
+        """
+        self.mosi_bytes = bytes(mosi_bytes)
+        self.miso_bytes = bytes(miso_bytes)
+        if len(mosi_bytes) != len(miso_bytes):
+            raise ValueError("MOSI and MISO bytes are not the same length!")
+
+    def __str__(self):
+        return f"[mosi: {binascii.b2a_hex(self.mosi_bytes)}, miso: {binascii.b2a_hex(self.miso_bytes)}]"
+
+    def __cmp__(self, other):
+        if not isinstance(other, SPITransaction):
+            return False
+
+        return other.mosi_bytes == self.mosi_bytes and other.miso_bytes == self.miso_bytes
+
+# Regex for one SPI data byte
+SR_SPI_DATA_BYTE = re.compile(r'spi-1: ([0-9A-F][0-9A-F])')
+
+# Regex for multiple data bytes in one transaction
+SR_SPI_DATA_BYTES = re.compile(r'spi-1: ([0-9A-F ]+)')
+
+
+class SigrokSPIRecorder():
+
+    def record(self, cs_pin: Optional[str], record_time: float):
+        """
+        Starts recording SPI data from the logic analyzer.
+        :param cs_pin: Logic analyzer pin to use for chip select.  e.g. "D3" or "D4".  May be set to None
+           to not use the CS line and record all traffic.
+        :param record_time: Time after the first clock edge to record data for
+        """
+
+        self._has_cs_pin = cs_pin is not None
+
+        # spi sigrok command
+        sigrok_spi_command = [*SIGROK_COMMON_COMMAND,
+
+                      # Set up SPI decoder.
+                      # Note that for now we always use mode 0 and a word size of 8, but that can be changed later.
+                      "--protocol-decoders",
+                      f"spi:clk=D0:mosi=D1:miso=D2{':cs=' + cs_pin if self._has_cs_pin else ''}:cpol=0:cpha=0:wordsize=8",
+
+                      # Run sigrok for the specified amount of milliseconds
+                      "--time", str(round(record_time * 1000))
+                      ]
+        if self._has_cs_pin:
+            # Trigger on falling edge of CS
+            sigrok_spi_command.append("--triggers")
+            sigrok_spi_command.append(f"{cs_pin}=f")
+
+            # Output complete transactions
+            sigrok_spi_command.append("--protocol-decoder-annotations")
+            sigrok_spi_command.append("spi=mosi-transfer:miso-transfer")
+        else:
+            # Trigger on any edge of clock
+            sigrok_spi_command.append("--triggers")
+            sigrok_spi_command.append("D0=e")
+
+            # The decoder has no transaction information without CS.
+            # So, we have to just get the raw bytes
+            sigrok_spi_command.append("--protocol-decoder-annotations")
+            sigrok_spi_command.append("spi=mosi-data:miso-data")
+
+        self._sigrok_process = subprocess.Popen(sigrok_spi_command, text=True, stdout = subprocess.PIPE)
+        time.sleep(SIGROK_START_DELAY)
+
+    def get_result(self) -> List[SPITransaction]:
+        """
+        Get the SPI data recorded by the logic analyzer.
+        :return: List of SPI transactions observed.  Note that if CS was not provided, every byte will
+            be considered as part of a single transaction.
+        """
+
+        self._sigrok_process.wait(5)
+
+        if self._sigrok_process.returncode != 0:
+            raise RuntimeError("Sigrok failed!")
+
+        sigrok_output = self._sigrok_process.communicate()[0].split("\n")
+
+        if self._has_cs_pin:
+
+            # If we have a CS pin then we will have multiple transactions to handle
+            spi_data : List[SPITransaction] = []
+
+            # Bytes from the previous line if this is an even line
+            previous_line_data: Optional[List[int]] = None
+
+            for line in sigrok_output:
+
+                # Skip empty lines
+                if line == "":
+                    continue
+
+                match_info = SR_SPI_DATA_BYTES.match(line)
+                if not match_info:
+                    print(f"Warning: Unparsed Sigrok output: '{line}'")
+                    continue
+
+                # Parse list of hex bytes
+                byte_strings = match_info.group(1).split("")
+                byte_values = [int(byte_string, 16) for byte_string in byte_strings]
+
+                if previous_line_data is None:
+                    previous_line_data = byte_values
+                else:
+                    # It appears that sigrok always alternates MISO, then MOSI lines in its CLI output.
+                    # This is not documented anywhere, so I had to test it on hardware.
+                    spi_data.append(SPITransaction(mosi_bytes=byte_values, miso_bytes=previous_line_data))
+                    previous_line_data = None
+
+            return spi_data
+
+        else:
+
+            # When we don't have a CS pin, we will get a bunch of lines with one data byte per line.
+            mosi_bytes = []
+            miso_bytes = []
+
+            # It appears that sigrok always alternates MISO, then MOSI lines in its CLI output.
+            # This is not documented anywhere, so I had to test it on hardware.
+            next_line_is_miso = True
+
+            for line in sigrok_output:
+
+                # Skip empty lines
+                if line == "":
+                    continue
+
+                match_info = SR_SPI_DATA_BYTES.match(line)
+                if not match_info:
+                    print(f"Warning: Unparsed Sigrok output: '{line}'")
+                    continue
+
+                byte_value = int(match_info.group(1), 16)
+
+                if next_line_is_miso:
+                    miso_bytes.append(byte_value)
+                    next_line_is_miso = False
+                else:
+                    mosi_bytes.append(byte_value)
+                    next_line_is_miso = True
+
+            return [SPITransaction(miso_bytes=miso_bytes, mosi_bytes=mosi_bytes)]
