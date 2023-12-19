@@ -69,10 +69,6 @@ inline void const * getMessage(size_t wordSize)
 // Long data message used in a few tests.  Starts with a recognizeable pattern.
 uint8_t const longMessage[32] = {0x01, 0x02, };
 
-// Buffers to receive data into during long message tests
-uint8_t logMessageRxData1[sizeof(longMessage)];
-uint8_t logMessageRxData2[sizeof(longMessage)];
-
 const uint32_t spiFreq = 1000000;
 const uint8_t spiMode = 0;
 
@@ -184,6 +180,8 @@ void write_transactional_rx_only()
     char rxBytes[sizeof(standardMessageBytes) / sizeof(Word)] {};
     spi->write(nullptr, 0, rxBytes, sizeof(standardMessageBytes));
 
+    host_print_spi_data();
+
     TEST_ASSERT_EQUAL_HEX8_ARRAY(defaultWriteResponse, rxBytes, sizeof(defaultWriteResponse));
 }
 
@@ -251,6 +249,8 @@ void free_and_reallocate_spi()
 
 #if DEVICE_SPI_ASYNCH
 
+StaticCacheAlignedBuffer<uint8_t, sizeof(standardMessageBytes)> dmaRxBuffer;
+
 template<DMAUsage dmaUsage>
 void write_async_tx_only()
 {
@@ -267,14 +267,13 @@ void write_async_rx_only()
 {
     host_start_spi_logging();
     spi->set_dma_usage(dmaUsage);
-    uint8_t rxBytes[sizeof(standardMessageBytes)]{};
-    auto ret = spi->transfer_and_wait(nullptr, 0, rxBytes, sizeof(standardMessageBytes), 1s);
+    auto ret = spi->transfer_and_wait(nullptr, 0, dmaRxBuffer, sizeof(standardMessageBytes), 1s);
     TEST_ASSERT_EQUAL(ret, 0);
 
     // Note: Currently Mbed does not respect the default write value for async SPI transactions.
     // What's written when the tx buffer is technically undefined but is 0xFF on most platforms.
     // See https://github.com/ARMmbed/mbed-os/issues/13941
-    printf("Got: %hhx %hhx %hhx %hhx\n", rxBytes[0], rxBytes[1], rxBytes[2], rxBytes[3]);
+    printf("Got: %hhx %hhx %hhx %hhx\n", dmaRxBuffer[0], dmaRxBuffer[1], dmaRxBuffer[2], dmaRxBuffer[3]);
 
     host_print_spi_data();
 }
@@ -284,10 +283,10 @@ void write_async_tx_rx()
 {
     host_start_spi_logging();
     spi->set_dma_usage(dmaUsage);
-    uint8_t rxBytes[sizeof(standardMessageBytes)]{};
-    auto ret = spi->transfer_and_wait(standardMessageBytes, sizeof(standardMessageBytes), rxBytes, sizeof(standardMessageBytes), 1s);
+
+    auto ret = spi->transfer_and_wait(standardMessageBytes, sizeof(standardMessageBytes), dmaRxBuffer, sizeof(standardMessageBytes), 1s);
     TEST_ASSERT_EQUAL(ret, 0);
-    TEST_ASSERT_EQUAL_HEX8_ARRAY(standardMessageBytes, rxBytes, sizeof(standardMessageBytes));
+    TEST_ASSERT_EQUAL_HEX8_ARRAY(standardMessageBytes, dmaRxBuffer.data(), sizeof(standardMessageBytes));
     host_assert_standard_message();
 }
 
@@ -336,18 +335,23 @@ void async_queue_and_abort()
     host_start_spi_logging();
 
     // Change SPI frequency to run at a lower rate, so we have more time for the test.
-    // At 100kHz, it will take 2.56ms to transmit 32 bytes of data.
-    spi->frequency(100000);
+    // Out of all devices tested so far, STM32L4 is the limiting factor since its lowest SPI frequency supported
+    // is 325kHz.
+    // At 325kHz, the transfer will take ~25us/byte.
+    spi->frequency(325000);
 
     spi->format(8, spiMode);
     spi->set_dma_usage(dmaUsage);
+
+    DynamicCacheAlignedBuffer<uint8_t> logMessageRxData1(sizeof(longMessage));
+    DynamicCacheAlignedBuffer<uint8_t> logMessageRxData2(sizeof(longMessage));
 
     // Fill buffers with a specific pattern.
     // The data that we'll get off the line is arbitrary but it will overwrite this pattern
     // so we can tell how much of each buffer was written.
     const uint8_t TEST_PATTERN = 0xAF;
-    memset(logMessageRxData1, TEST_PATTERN, sizeof(longMessage));
-    memset(logMessageRxData2, TEST_PATTERN, sizeof(longMessage));
+    memset(logMessageRxData1.data(), TEST_PATTERN, sizeof(longMessage));
+    memset(logMessageRxData2.data(), TEST_PATTERN, sizeof(longMessage));
 
     // Set up a callback to save the value of the event, if delivered
     volatile int callbackEvent1 = 0;
@@ -366,23 +370,24 @@ void async_queue_and_abort()
     ret = spi->transfer(longMessage, sizeof(longMessage), logMessageRxData2, sizeof(longMessage), transferCallback2, SPI_EVENT_ALL);
     TEST_ASSERT_EQUAL(ret, 0);
 
-    // Allow enough time for a few bytes of the first transfer to be sent
-    wait_us(100);
+    // Allow enough time to get about halfway through the first transfer.
+    wait_us(384);
 
     // Now cancel the first transfer
     spi->abort_transfer();
 
     // Allow the second transfer to run to completion
-    rtos::ThisThread::sleep_for(5ms);
+    rtos::ThisThread::sleep_for(10ms);
 
     // The first transfer should have been canceled after writing at least one byte but before filling the entire Rx buffer
-    size_t testPatternCountBuf1 = std::count(std::begin(logMessageRxData1), std::end(logMessageRxData1), TEST_PATTERN);
-    TEST_ASSERT(testPatternCountBuf1 > 0);
+    size_t testPatternCountBuf1 = std::count(logMessageRxData1.begin(), logMessageRxData1.end(), TEST_PATTERN);
+    // Depending on DMA behavior, some or none of the bytes may have been written back to the buffer.
+    // However, the full count of bytes should not have been written.
     TEST_ASSERT(testPatternCountBuf1 < sizeof(longMessage));
 
     // The second transfer should have overwritten the entire Rx buffer
-    size_t testPatternCountBuf2 = std::count(std::begin(logMessageRxData2), std::end(logMessageRxData2), TEST_PATTERN);
-    TEST_ASSERT_EQUAL(testPatternCountBuf2, 0);
+    size_t testPatternCountBuf2 = std::count(logMessageRxData2.begin(), logMessageRxData2.end(), TEST_PATTERN);
+    TEST_ASSERT_EQUAL(0, testPatternCountBuf2);
 
     // The first transfer should have delivered no flags.
     // The second transfer should have delivered a completion flag.
@@ -444,8 +449,6 @@ void async_free_and_reallocate_spi()
 
 #endif
 
-// TODO test for async fill characters
-
 utest::v1::status_t test_setup(const size_t number_of_cases)
 {
     // Create SPI.  For now, we won't use any CS pin, because we don't want to trigger the MicroSD card
@@ -457,13 +460,15 @@ utest::v1::status_t test_setup(const size_t number_of_cases)
     // For starters, don't use DMA, but we will use it later
     spi->set_dma_usage(DMA_USAGE_NEVER);
 
-
     // Initialize logic analyzer for SPI pinouts
     static BusOut funcSelPins(PIN_FUNC_SEL0, PIN_FUNC_SEL1, PIN_FUNC_SEL2);
     funcSelPins = 0b010;
 
+    // Set the SD card CS pin to high so it doesn't try to use the bus
+    DigitalOut sdCsPin(PIN_SPI_SD_CS, 1);
+
     // Setup Greentea using a reasonable timeout in seconds
-    GREENTEA_SETUP(30, "spi_basic_test");
+    GREENTEA_SETUP(45, "spi_basic_test");
     return verbose_test_setup_handler(number_of_cases);
 }
 
@@ -485,35 +490,35 @@ Case cases[] = {
         Case("Send 32 Bit Data via Transactional API (Tx only)", write_transactional_tx_only<uint32_t>),
 #endif
 
-        Case("Read Data via Transactional API (Rx only)", write_transactional_rx_only<uint8_t>),
-        Case("Read Data via Transactional API (Rx only)", write_transactional_rx_only<uint16_t>),
+        Case("Read 8 Bit Data via Transactional API (Rx only)", write_transactional_rx_only<uint8_t>),
+        Case("Read 16 Bit Data via Transactional API (Rx only)", write_transactional_rx_only<uint16_t>),
 #if DEVICE_SPI_32BIT_WORDS
-        Case("Read Data via Transactional API (Rx only)", write_transactional_rx_only<uint32_t>),
+        Case("Read 32 Bit Data via Transactional API (Rx only)", write_transactional_rx_only<uint32_t>),
 #endif
 
-        Case("Transfer Data via Transactional API (Tx/Rx)", write_transactional_tx_rx<uint8_t>),
-        Case("Transfer Data via Transactional API (Tx/Rx)", write_transactional_tx_rx<uint16_t>),
+        Case("Transfer 8 Bit Data via Transactional API (Tx/Rx)", write_transactional_tx_rx<uint8_t>),
+        Case("Transfer 16 Bit Data via Transactional API (Tx/Rx)", write_transactional_tx_rx<uint16_t>),
+#if DEVICE_SPI_32BIT_WORDS
+        Case("Transfer 32 Bit Data via Transactional API (Tx/Rx)", write_transactional_tx_rx<uint32_t>),
+#endif
         Case("Use Multiple SPI Instances (synchronous API)", use_multiple_spi_objects),
         Case("Free and Reallocate SPI Instance (synchronous API)", free_and_reallocate_spi),
-#if DEVICE_SPI_32BIT_WORDS
-        Case("Transfer Data via Transactional API (Tx/Rx)", write_transactional_tx_rx<uint32_t>),
-#endif
 
 #if DEVICE_SPI_ASYNCH
         Case("Send Data via Async Interrupt API (Tx only)", write_async_tx_only<DMA_USAGE_NEVER>),
         Case("Send Data via Async Interrupt API (Rx only)", write_async_rx_only<DMA_USAGE_NEVER>),
+        Case("Free and Reallocate SPI Instance with Interrupts", async_free_and_reallocate_spi<DMA_USAGE_NEVER>),
         Case("Send Data via Async Interrupt API (Tx/Rx)", write_async_tx_rx<DMA_USAGE_NEVER>),
         Case("Benchmark Async SPI via Interrupts", benchmark_async_transaction<DMA_USAGE_NEVER>),
         Case("Queueing and Aborting Async SPI via Interrupts", async_queue_and_abort<DMA_USAGE_NEVER>),
         Case("Use Multiple SPI Instances with Interrupts", async_use_multiple_spi_objects<DMA_USAGE_NEVER>),
-        Case("Free and Reallocate SPI Instance with Interrupts", async_free_and_reallocate_spi<DMA_USAGE_NEVER>),
         Case("Send Data via Async DMA API (Tx only)", write_async_tx_only<DMA_USAGE_ALWAYS>),
         Case("Send Data via Async DMA API (Rx only)", write_async_rx_only<DMA_USAGE_ALWAYS>),
+        Case("Free and Reallocate SPI Instance with DMA", async_free_and_reallocate_spi<DMA_USAGE_ALWAYS>),
         Case("Send Data via Async DMA API (Tx/Rx)", write_async_tx_rx<DMA_USAGE_ALWAYS>),
         Case("Benchmark Async SPI via DMA", benchmark_async_transaction<DMA_USAGE_ALWAYS>),
         Case("Queueing and Aborting Async SPI via DMA", async_queue_and_abort<DMA_USAGE_ALWAYS>),
         Case("Use Multiple SPI Instances with DMA", async_use_multiple_spi_objects<DMA_USAGE_ALWAYS>),
-        Case("Free and Reallocate SPI Instance with DMA", async_free_and_reallocate_spi<DMA_USAGE_ALWAYS>),
 #endif
 };
 

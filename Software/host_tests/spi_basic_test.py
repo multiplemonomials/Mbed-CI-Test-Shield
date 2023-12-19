@@ -39,7 +39,7 @@ class SpiBasicTestHostTest(BaseHostTest):
         Called at the start of every test case.  Should start a recording of SPI data.
         """
 
-        self.recorder.record(None, .01) # .01 seconds should be enough for every test in this suite
+        self.recorder.record(None, .05) # .05 seconds should be enough for every test in this suite
 
         self.send_kv('start_recording_spi', 'complete')
 
@@ -55,7 +55,7 @@ class SpiBasicTestHostTest(BaseHostTest):
             self.logger.prn_inf("PASS")
             self.send_kv('verify_sequence', 'complete')
         else:
-            self.logger.prn_inf("We expected: " + self.SEQUENCES[value])
+            self.logger.prn_inf("We expected: " + str(self.SEQUENCES[value]))
             self.logger.prn_inf("FAIL")
             self.send_kv('verify_sequence', 'failed')
 
@@ -105,3 +105,5 @@ class SpiBasicTestHostTest(BaseHostTest):
 
         self.logger.prn_inf("SPI Basic Test host test setup complete.")
 
+    def teardown(self):
+        self.recorder.teardown()

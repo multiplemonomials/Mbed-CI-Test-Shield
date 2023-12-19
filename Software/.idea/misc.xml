@@ -5,6 +5,7 @@
     <sourceRoots>
       <file path="$PROJECT_DIR$/host_test_utils" />
       <file path="$PROJECT_DIR$/host_tests" />
+      <file path="$PROJECT_DIR$/mbed-os/tools/python" />
       <file path="$PROJECT_DIR$/pyBusPirateLite" />
     </sourceRoots>
     <excludeRoots>

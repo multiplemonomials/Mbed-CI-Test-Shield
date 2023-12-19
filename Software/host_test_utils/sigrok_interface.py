@@ -45,7 +45,7 @@ SIGROK_I2C_COMMAND = [*SIGROK_COMMON_COMMAND,
 
 # How long to wait, in seconds, after starting a sigrok recording before we can start the test.
 # It would sure be nice if sigrok had some sort of "I'm ready to capture data" printout...
-SIGROK_START_DELAY = 0.5 # s
+SIGROK_START_DELAY = 1.0 # s
 
 
 class I2CBusData:
@@ -177,6 +177,10 @@ SR_I2C_STOP = re.compile(r'i2c-1: Stop')
 
 
 class SigrokI2CRecorder():
+
+    def __init__(self):
+        self._sigrok_process: Optional[subprocess.Popen] = None
+
     def record(self, record_time: float):
         """
         Starts recording I2C data from the logic analyzer.
@@ -232,6 +236,15 @@ class SigrokI2CRecorder():
 
         return i2c_transaction
 
+    def teardown(self):
+        """
+        Call from test case teardown function.  Ensures that sigrok is stopped
+        e.g. in the event of a device hang.
+        """
+        if self._sigrok_process is not None:
+            if self._sigrok_process.poll() is None:
+                self._sigrok_process.terminate()
+
 
 @dataclass
 class SPITransaction():
@@ -268,6 +281,9 @@ SR_SPI_DATA_BYTES = re.compile(r'spi-1: ([0-9A-F ]+)')
 
 
 class SigrokSPIRecorder():
+
+    def __init__(self):
+        self._sigrok_process: Optional[subprocess.Popen] = None
 
     def record(self, cs_pin: Optional[str], record_time: float):
         """
@@ -389,3 +405,12 @@ class SigrokSPIRecorder():
                     next_line_is_miso = True
 
             return [SPITransaction(miso_bytes=miso_bytes, mosi_bytes=mosi_bytes)]
+
+    def teardown(self):
+        """
+        Call from test case teardown function.  Ensures that sigrok is stopped
+        e.g. in the event of a device hang.
+        """
+        if self._sigrok_process is not None:
+            if self._sigrok_process.poll() is None:
+                self._sigrok_process.terminate()

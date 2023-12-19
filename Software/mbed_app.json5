@@ -50,11 +50,6 @@
             "macro_name": "PIN_SPI_SD_CS",
             "value": "ARDUINO_UNO_D8"
         },
-        "PIN_PWM_OUT": {
-            "help": "Pin connected to PWM_OUT on the test shield.",
-            "macro_name": "PIN_PWM_OUT",
-            "value": "ARDUINO_UNO_D5"
-        },
         "PIN_ANALOG_IN": {
             "help": "Pin connected to ANALOG_IN on the test shield.",
             "macro_name": "PIN_ANALOG_IN",
@@ -76,7 +71,7 @@
             "value": "ARDUINO_UNO_D4"
         },
         "PIN_GPOUT_1": {
-            "help": "Pin connected to GPOUT_1 on the test shield.",
+            "help": "Pin connected to GPOUT_1 on the test shield.  Must support PWM output.",
             "macro_name": "PIN_GPOUT_1",
             "value": "ARDUINO_UNO_D5"
         },
@@ -112,7 +107,8 @@
             "sd.SPI_CLK": "D13"
         },
         "STM32L452xE": {
-            // This was added because
+            // This was added because not using it seemed to cause intermittent
+            // glitchy behavior with UART comms on my dev board
             "target.clock_source": "USE_PLL_HSI"
         }
     }

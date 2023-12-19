@@ -26,9 +26,7 @@
 #endif
 
 // How long to wait after changing a GPIO output pin for the signal to propagate to the input pin.
-// Some boards (Nucleo F767, specifically for GPIN/OUT 1) observed to need a relatively long time for the signal to propagate.
-// That's a bit odd but ultimately signal integrity issues on dev boards are outside the scope of this test!
-constexpr int GPIO_PROPAGATION_TIME = 1000; // us
+constexpr int GPIO_PROPAGATION_TIME = 100; // us
 
 /*
  * Wait for the next host message with the given key, and then assert that its

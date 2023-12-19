@@ -100,3 +100,6 @@ class I2CBasicTestHostTest(BaseHostTest):
         self.register_callback('verify_sequence', self._callback_verify_sequence)
 
         self.logger.prn_inf("I2C Basic Test host test setup complete.")
+
+    def teardown(self):
+        self.recorder.teardown()
