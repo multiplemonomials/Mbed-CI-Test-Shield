@@ -106,6 +106,10 @@
             "sd.SPI_MISO": "D12",
             "sd.SPI_CLK": "D13"
         },
+        "RASPBERRY_PI_PICO": {
+            "PIN_ANALOG_IN": "A0",
+            "PIN_GPOUT_1": "p27"
+        },
         "STM32L452xE": {
             // This was added because not using it seemed to cause intermittent
             // glitchy behavior with UART comms on my dev board

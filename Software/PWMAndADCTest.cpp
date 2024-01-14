@@ -21,6 +21,8 @@
 
 #include "ci_test_common.h"
 
+#include <random>
+
 using namespace utest::v1;
 
 AnalogIn adc(PIN_ANALOG_IN);
@@ -32,16 +34,22 @@ constexpr std::chrono::milliseconds PWM_FILTER_DELAY = 50ms; // nominal time con
 // GPIO output voltage expressed as a percent of the ADC reference voltage.  Experimentally determined by the first test case.
 float ioVoltageADCPercent;
 
+std::mt19937 randomGen(287327); // Fixed random seed for repeatability
+
 /*
  * Tests that we can see a response on the ADC when setting the PWM pin to a constant high or low value.
  */
 void test_adc_digital_value()
 {
-    // Make sure turning the PWM off gets a zero volt input on the ADC
+    // The filter in hardware is set up for a PWM signal of ~10kHz.
+    pwmOut.period(.0001);
+
+    // Make sure turning the PWM off gets a zero percent input on the ADC
     pwmOut.write(0);
     ThisThread::sleep_for(PWM_FILTER_DELAY);
-    float zeroVoltage = adc.read_voltage();
-    TEST_ASSERT_FLOAT_WITHIN(.1f, 0, zeroVoltage);
+    float zeroADCPercent = adc.read();
+    printf("With the PWM at full off, the ADC reads %.01f%% of reference voltage.\n", zeroADCPercent * 100.0f);
+    TEST_ASSERT_FLOAT_WITHIN(.1f, 0, zeroADCPercent);
 
     // Now see what happens when we turn the PWM all the way on
     pwmOut.write(1);
@@ -78,11 +86,15 @@ void test_adc_digital_value()
  */
 void test_adc_analog_value()
 {
+    // The filter in hardware is set up for a PWM signal of ~10kHz.
+    pwmOut.period(.0001);
+
     const size_t numSteps = 10;
 
-    // Allow a 1% tolerance on the read ADC values.  That should be about right because most Mbed targets
+    // Allow a 1.5% tolerance on the read ADC values.  That should be about right because most Mbed targets
     // have between an 8 bit and a 12 bit ADC.
-    const float adcTolerancePercent = .01f;
+    // The least accurate ADC observed so far is on the RP2040, which was up to 1.1% off.
+    const float adcTolerancePercent = .015f;
 
     for(size_t stepIdx = 0; stepIdx < numSteps; ++stepIdx)
     {
@@ -100,20 +112,91 @@ void test_adc_analog_value()
     }
 }
 
+/*
+ * Test that we are actually hitting the PWM frequencies and duty cycles we are supposed to be.
+ * This uses the Sigrok logic analyzer to detect the duty cycle and PWM frequency
+ */
+template<uint32_t period_us>
+void test_pwm()
+{
+    pwmOut.period_us(period_us);
+    const float frequency = 1e6 / period_us;
+
+    const size_t numTrials = 5;
+
+    for(size_t trial = 0; trial < numTrials; ++trial)
+    {
+        // Randomly choose a duty cycle for the trial.
+        // With the logic analyzer running at 4 MHz, each pulse needs to last at least 250 ns for it to be detectable.
+        // Example: if period_us is 1us, then the minimum duty cycle is (250ns / 1000ns) = 0.25
+        float minPeriodPercent = 250 / (period_us * 1e3);
+
+        float maxPeriodPercent = 1 - minPeriodPercent;
+
+        float dutyCycle = std::uniform_real_distribution<float>(minPeriodPercent, maxPeriodPercent)(randomGen);
+
+        pwmOut.write(dutyCycle);
+
+        // Use the host test to measure the signal attributes
+        greentea_send_kv("analyze_signal", "please");
+
+        char receivedKey[64], receivedValue[64];
+        float measuredFrequencyHz = 0;
+        float measuredDutyCycle = 0;
+        while (1) {
+            greentea_parse_kv(receivedKey, receivedValue, sizeof(receivedKey), sizeof(receivedValue));
+
+            if(strncmp("frequency", receivedKey, sizeof(receivedKey) - 1) == 0)
+            {
+                measuredFrequencyHz = atof(receivedValue);
+            }
+            if(strncmp("duty_cycle", receivedKey, sizeof(receivedKey) - 1) == 0)
+            {
+                measuredDutyCycle = atof(receivedValue);
+
+                // We get the duty cycle second so we can break once we have it
+                break;
+            }
+        }
+
+        // For frequency, the host test measures for 100 ms, meaning that it should be able to
+        // detect frequency within +-10Hz.  We'll double that for the assert to be a bit generous.
+        const float frequencyTolerance = 20;
+
+        // For duty cycle, implementations should hopefully be at least 0.1% accurate.
+        const float dutyCycleTolerance = .001;
+
+        printf("Expected PWM frequency was %.00f Hz (+- %.00f Hz) and duty cycle was %.02f%% (+-%.02f%%), host measured frequency %.00f Hz and duty cycle %.02f%%\n",
+               frequency,
+               frequencyTolerance,
+               dutyCycle * 100.0f,
+               dutyCycleTolerance * 100.0f,
+               measuredFrequencyHz,
+               measuredDutyCycle * 100.0f);
+
+        TEST_ASSERT_FLOAT_WITHIN(frequencyTolerance, frequency, measuredFrequencyHz);
+        TEST_ASSERT_FLOAT_WITHIN(dutyCycleTolerance, dutyCycle, measuredDutyCycle);
+    }
+}
+
 utest::v1::status_t test_setup(const size_t number_of_cases) {
     // Setup Greentea using a reasonable timeout in seconds
-    GREENTEA_SETUP(30, "default_auto");
-
-    // The filter in hardware is set up for a PWM signal of ~10kHz.
-    pwmOut.period(.0001);
+    GREENTEA_SETUP(30, "signal_analyzer_test");
 
     return verbose_test_setup_handler(number_of_cases);
 }
 
 // Test cases
 Case cases[] = {
-        Case("Test reading digital values with the ADC", test_adc_digital_value),
-        Case("Test reading analog values with the ADC", test_adc_analog_value),
+    Case("Test reading digital values with the ADC", test_adc_digital_value),
+    Case("Test reading analog values with the ADC", test_adc_analog_value),
+    Case("Test PWM frequency and duty cycle (freq = 50 Hz)", test_pwm<20000>),
+    Case("Test PWM frequency and duty cycle (freq = 1 kHz)", test_pwm<1000>),
+    Case("Test PWM frequency and duty cycle (freq = 10 kHz)", test_pwm<100>),
+    Case("Test PWM frequency and duty cycle (freq = 100 kHz)", test_pwm<10>),
+
+    // Note: Many targets currently cannot do 1MHz PWM.  This test will help figure out which ones those are.
+    Case("Test PWM frequency and duty cycle (freq = 1 MHz)", test_pwm<1>),
 };
 
 Specification specification(test_setup, cases, greentea_continue_handlers);

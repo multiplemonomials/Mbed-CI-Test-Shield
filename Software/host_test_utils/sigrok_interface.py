@@ -1,6 +1,7 @@
 ## Module to interface with the test shield's internal
 ## Sigrok-based logic analyzer.
 ## Handles running the Sigrok command and parsing the results.
+import abc
 import binascii
 # Note: This module file cannot be in the host_tests directory, because the test runner iterates through
 # and imports all the modules in that directory.  So, if it's in there, it gets imported twice, and really
@@ -17,35 +18,80 @@ from dataclasses import dataclass
 if "MBED_SIGROK_COMMAND" not in os.environ:
     raise RuntimeError("Must set the MBED_SIGROK_COMMAND environment variable to use the Sigrok logic analyzer tests.")
 
+LOGIC_ANALYZER_FREQUENCY = 4 # MHz
+
 # common sigrok command -- for all protocols
 SIGROK_COMMON_COMMAND = [*shlex.split(os.environ["MBED_SIGROK_COMMAND"]),
                          "--driver", "fx2lafw",  # Set driver to FX2LAFW
                          "--config",
-                         # 4 MHz seems to be the best I can get on my PCB before running into a "device only sent x samples" error
-                         # Additionally, for decoding messages right at the trigger, we need to change the "capture ratio"
+                         # For decoding messages right at the trigger, we need to change the "capture ratio"
                          # option so that just a few samples are kept from before the trigger.
                          # Details here: https://sigrok.org/bugzilla/show_bug.cgi?id=1657
                          # The hard part was figuring out how to change the capture ratio as there is zero documentation.
                          # It appears that it's a percentage from 0 to 100.
-                         "samplerate=4 MHz:captureratio=5"
+                         f"samplerate={LOGIC_ANALYZER_FREQUENCY} MHz:captureratio=5"
                          ]
-
-# i2c sigrok command
-SIGROK_I2C_COMMAND = [*SIGROK_COMMON_COMMAND,
-                      "--protocol-decoders",
-                      "i2c:scl=D0:sda=D1:address_format=unshifted",  # Set up I2C decoder
-                      "--protocol-decoder-annotations",
-                      "i2c=address-read:address-write:data-read:data-write:start:repeat-start:ack:nack:stop",  # Request output of all detectable conditions
-
-                      # Trigger on falling edge of SCL
-                      "--triggers",
-                      "D0=f",
-                      ]
 
 
 # How long to wait, in seconds, after starting a sigrok recording before we can start the test.
 # It would sure be nice if sigrok had some sort of "I'm ready to capture data" printout...
 SIGROK_START_DELAY = 1.0 # s
+
+
+class SigrokRecorderBase(abc.ABC):
+    """
+    Base class for sigrok recorder classes.
+    Handles starting and stopping the sigrok process.
+    """
+
+    def __init__(self):
+        self._sigrok_process: Optional[subprocess.Popen] = None
+
+    def _start_sigrok(self, sigrok_args: List[str], record_time: float):
+        """
+        Starts recording data using the given Sigrok command.
+        :param record_time: Time to run sigrok for in seconds.  If the command includes a trigger clause,
+            this is the time after the trigger occurs.
+        """
+        # Run sigrok for the specified amount of milliseconds
+        command = [*SIGROK_COMMON_COMMAND, *sigrok_args, "--time", str(round(record_time * 1000))]
+        print("Executing: " + " ".join(command))
+        self._sigrok_process = subprocess.Popen(command, text=True, stdout = subprocess.PIPE)
+        time.sleep(SIGROK_START_DELAY)
+
+    def _get_sigrok_output(self) -> List[str]:
+        """
+        Get the output from sigrok as a list of text lines.
+        It would sure be nice if Sigrok CLI had some way to output decoded data as a machine readable
+        file format, but
+        "Data processed by decoders can't be saved into output file by argument, only by redirection of STDOUT."
+        (per https://sigrok.org/wiki/Input_output_formats)
+        Sadness.
+        """
+
+        try:
+            # Timeout is a guess for how long the sigrok process will take to record data and exit.
+            # If the trigger condition is not reached, this timeout will trigger.
+            output, errs = self._sigrok_process.communicate(timeout=5)
+        except subprocess.TimeoutExpired:
+
+            # Recommended by the subprocess docs to kill manually if the timeout has expired
+            self._sigrok_process.kill()
+            raise
+
+        if self._sigrok_process.returncode != 0:
+            raise RuntimeError("Sigrok failed!")
+
+        return output.split("\n")
+
+    def teardown(self):
+        """
+        Call from test case teardown function.  Ensures that sigrok is stopped
+        e.g. in the event of a device hang.
+        """
+        if self._sigrok_process is not None:
+            if self._sigrok_process.poll() is None:
+                self._sigrok_process.terminate()
 
 
 class I2CBusData:
@@ -176,21 +222,27 @@ SR_I2C_NACK = re.compile(r'i2c-1: NACK')
 SR_I2C_STOP = re.compile(r'i2c-1: Stop')
 
 
-class SigrokI2CRecorder():
+class SigrokI2CRecorder(SigrokRecorderBase):
 
+    # i2c sigrok command
+    SIGROK_I2C_COMMAND = ["--protocol-decoders",
+                          "i2c:scl=D0:sda=D1:address_format=unshifted",  # Set up I2C decoder
+                          "--protocol-decoder-annotations",
+                          "i2c=address-read:address-write:data-read:data-write:start:repeat-start:ack:nack:stop",  # Request output of all detectable conditions
+
+                          # Trigger on falling edge of SCL
+                          "--triggers",
+                          "D0=f",
+                          ]
     def __init__(self):
-        self._sigrok_process: Optional[subprocess.Popen] = None
+        super().__init__()
 
     def record(self, record_time: float):
         """
         Starts recording I2C data from the logic analyzer.
         :param record_time: Time after the first clock edge to record data for
         """
-        # Run sigrok for the specified amount of milliseconds
-        command = [*SIGROK_I2C_COMMAND, "--time", str(round(record_time * 1000))]
-        #print("Executing: " + " ".join(command))
-        self._sigrok_process = subprocess.Popen(command, text=True, stdout = subprocess.PIPE)
-        time.sleep(SIGROK_START_DELAY)
+        self._start_sigrok(self.SIGROK_I2C_COMMAND, record_time)
 
     def get_result(self) -> List[I2CBusData]:
         """
@@ -198,10 +250,7 @@ class SigrokI2CRecorder():
         :return: Data recorded (list of I2CBusData subclasses)
         """
 
-        self._sigrok_process.wait(5)
-
-        if self._sigrok_process.returncode != 0:
-            raise RuntimeError("Sigrok failed!")
+        sigrok_output = self._get_sigrok_output()
 
         i2c_transaction: List[I2CBusData] = []
 
@@ -280,10 +329,10 @@ SR_SPI_DATA_BYTE = re.compile(r'spi-1: ([0-9A-F][0-9A-F])')
 SR_SPI_DATA_BYTES = re.compile(r'spi-1: ([0-9A-F ]+)')
 
 
-class SigrokSPIRecorder():
+class SigrokSPIRecorder(SigrokRecorderBase):
 
     def __init__(self):
-        self._sigrok_process: Optional[subprocess.Popen] = None
+        super().__init__()
 
     def record(self, cs_pin: Optional[str], record_time: float):
         """
@@ -296,16 +345,13 @@ class SigrokSPIRecorder():
         self._has_cs_pin = cs_pin is not None
 
         # spi sigrok command
-        sigrok_spi_command = [*SIGROK_COMMON_COMMAND,
+        sigrok_spi_command = [
+              # Set up SPI decoder.
+              # Note that for now we always use mode 0 and a word size of 8, but that can be changed later.
+              "--protocol-decoders",
+              f"spi:clk=D0:mosi=D1:miso=D2{':cs=' + cs_pin if self._has_cs_pin else ''}:cpol=0:cpha=0:wordsize=8",
+              ]
 
-                      # Set up SPI decoder.
-                      # Note that for now we always use mode 0 and a word size of 8, but that can be changed later.
-                      "--protocol-decoders",
-                      f"spi:clk=D0:mosi=D1:miso=D2{':cs=' + cs_pin if self._has_cs_pin else ''}:cpol=0:cpha=0:wordsize=8",
-
-                      # Run sigrok for the specified amount of milliseconds
-                      "--time", str(round(record_time * 1000))
-                      ]
         if self._has_cs_pin:
             # Trigger on falling edge of CS
             sigrok_spi_command.append("--triggers")
@@ -324,8 +370,7 @@ class SigrokSPIRecorder():
             sigrok_spi_command.append("--protocol-decoder-annotations")
             sigrok_spi_command.append("spi=mosi-data:miso-data")
 
-        self._sigrok_process = subprocess.Popen(sigrok_spi_command, text=True, stdout = subprocess.PIPE)
-        time.sleep(SIGROK_START_DELAY)
+        self._start_sigrok(sigrok_spi_command, record_time)
 
     def get_result(self) -> List[SPITransaction]:
         """
@@ -334,12 +379,7 @@ class SigrokSPIRecorder():
             be considered as part of a single transaction.
         """
 
-        self._sigrok_process.wait(5)
-
-        if self._sigrok_process.returncode != 0:
-            raise RuntimeError("Sigrok failed!")
-
-        sigrok_output = self._sigrok_process.communicate()[0].split("\n")
+        sigrok_output = self._get_sigrok_output()
 
         if self._has_cs_pin:
 
@@ -414,3 +454,63 @@ class SigrokSPIRecorder():
         if self._sigrok_process is not None:
             if self._sigrok_process.poll() is None:
                 self._sigrok_process.terminate()
+
+
+class SigrokSignalAnalyzer(SigrokRecorderBase):
+    """
+    Class which analyzes a digital signal's frequency and duty cycle using Sigrok.
+    Frequency is approximated by measuring the number of rising edges within the sampling period,
+    which should have pretty high accuracy even with a relatively slow logic analyzer.
+    Duty cycle is determined by measuring the ratio of samples where the signal is high vs low.
+
+    Note that the signal being measured has to be <= half the logic analyzer sampling frequency,
+    or we will go above the nyquist limit and accurate results can't be obtained.
+    """
+
+    def __init__(self):
+        super().__init__()
+
+    # Recording for 100ms should allow accurate frequency estimates
+    RECORD_TIME = 0.1 # s
+
+    def measure_signal(self, pin_num: int) -> Tuple[float, float]:
+        """
+        Measures a signal.  The signal should have already been started by the embedded
+        test case before calling this function, and must remain stable until it returns.
+        :param pin_num: Pin number from 0-7 on the logic analyzer that the signal exists on
+        :returns: Tuple of [frequency in Hz, duty cycle in seconds]
+        """
+
+        # Start recording raw samples (not using any decoders for this)
+        sigrok_args = [
+            "--channels", f"D{pin_num}", "--output-format", "csv"
+        ]
+        self._start_sigrok(sigrok_args, self.RECORD_TIME)
+
+        # Get the output as soon as it finishes (no trigger clause so it should run quickly)
+        sigrok_output = self._get_sigrok_output()
+
+        # For CSV format, the actual data starts on line index 5, and contains one sample per line.
+        sigrok_output = sigrok_output[5:]
+        channel_samples = [line == "1" for line in sigrok_output]
+
+        num_high_samples = 0
+        num_rising_edges = 0
+
+        for sample_idx in range(0, len(channel_samples)):
+            # Check rising edge?
+            if sample_idx > 1:
+                if (not channel_samples[sample_idx - 1]) and channel_samples[sample_idx]:
+                    num_rising_edges += 1
+
+            # update duty cycle measurement
+            if channel_samples[sample_idx]:
+                num_high_samples += 1
+
+        # Compute duty cycle
+        duty_cycle = num_high_samples / len(channel_samples)
+
+        # Compute frequency
+        frequency = num_rising_edges / self.RECORD_TIME
+
+        return (frequency, duty_cycle)

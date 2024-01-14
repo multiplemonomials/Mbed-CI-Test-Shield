@@ -9,7 +9,10 @@
       <file path="$PROJECT_DIR$/pyBusPirateLite" />
     </sourceRoots>
     <excludeRoots>
+      <file path="$PROJECT_DIR$/cmake-build-develop-nucleo-f429zi" />
+      <file path="$PROJECT_DIR$/cmake-build-develop-nucleo-h743zi" />
       <file path="$PROJECT_DIR$/cmake-build-develop-nucleo-l452re" />
+      <file path="$PROJECT_DIR$/cmake-build-develop-nucleo-u575zi" />
     </excludeRoots>
   </component>
 </project>
