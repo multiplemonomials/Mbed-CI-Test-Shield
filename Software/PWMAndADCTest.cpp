@@ -160,11 +160,19 @@ void test_pwm()
         }
 
         // For frequency, the host test measures for 100 ms, meaning that it should be able to
-        // detect frequency within +-10Hz.  We'll double that for the assert to be a bit generous.
+        // detect frequency within +-10Hz.  We'll double to 20Hz that to be a bit generous.
+        // Note that we only run at even power-of-10 frequencies, so most MCUs *should* be able to hit them
+        // precisely with a clock divider.  We shall see if any do not meet this assumption though..
         const float frequencyTolerance = 20;
 
         // For duty cycle, implementations should hopefully be at least 0.1% accurate.
-        const float dutyCycleTolerance = .001;
+        // However, at high clock frequencies, the resolution often gets worse, because the timer concerned might
+        // only be counting to a few hundred before resetting.
+        // Example: on RP2040, at 1MHz, the PWM counts to 125 before resetting, so we have an accuracy of 0.01 us
+        // on a period of 1 us (giving a resolution a bit better than 1%)
+        // We'll add another factor of 10 and say that we must only be as accurate as 0.1us if 0.1us is more
+        // than 0.1% of the period, so for the RP2040 at 1MHz, the requirement would only be 10% duty cycle accuracy.
+        const float dutyCycleTolerance = std::max(.001f, .1f / period_us);
 
         printf("Expected PWM frequency was %.00f Hz (+- %.00f Hz) and duty cycle was %.02f%% (+-%.02f%%), host measured frequency %.00f Hz and duty cycle %.02f%%\n",
                frequency,
@@ -176,12 +184,19 @@ void test_pwm()
 
         TEST_ASSERT_FLOAT_WITHIN(frequencyTolerance, frequency, measuredFrequencyHz);
         TEST_ASSERT_FLOAT_WITHIN(dutyCycleTolerance, dutyCycle, measuredDutyCycle);
+
+        // Extra test: check that read_pulsewidth_us() produces the correct value
+        float pulseWidthUs = dutyCycle * period_us;
+        TEST_ASSERT_EQUAL_INT32(lroundf(pulseWidthUs), pwmOut.read_pulsewidth_us());
     }
+
+    // As one last extra test, make sure that reading the period gets the correct value
+    TEST_ASSERT_EQUAL_INT32(period_us, pwmOut.read_period_us());
 }
 
 utest::v1::status_t test_setup(const size_t number_of_cases) {
     // Setup Greentea using a reasonable timeout in seconds
-    GREENTEA_SETUP(30, "signal_analyzer_test");
+    GREENTEA_SETUP(60, "signal_analyzer_test");
 
     return verbose_test_setup_handler(number_of_cases);
 }

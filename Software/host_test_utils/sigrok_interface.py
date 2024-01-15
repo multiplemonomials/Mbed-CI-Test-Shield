@@ -55,7 +55,7 @@ class SigrokRecorderBase(abc.ABC):
         """
         # Run sigrok for the specified amount of milliseconds
         command = [*SIGROK_COMMON_COMMAND, *sigrok_args, "--time", str(round(record_time * 1000))]
-        print("Executing: " + " ".join(command))
+        #print("Executing: " + " ".join(command))
         self._sigrok_process = subprocess.Popen(command, text=True, stdout = subprocess.PIPE)
         time.sleep(SIGROK_START_DELAY)
 
